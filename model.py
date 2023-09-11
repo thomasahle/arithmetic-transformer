@@ -147,6 +147,9 @@ class AdditionModel(nn.Module):
 
     def generate(self, input_sequence):
         # Generate output sequence from input sequence using trained model
+        # TODO: We use greedy digit-by-digit generation. It's possible the models
+        # would perform a bit better if we instead used beam search to pick the most
+        # likely overall result.
         assert input_sequence[-1] == self.ds.end_token
         # Pad to expected length
         n = len(input_sequence)
@@ -175,7 +178,8 @@ class AdditionModel(nn.Module):
                 print("Data:   ", example)
                 string = "".join(dic[t] for t in example)
                 nums = [num for num in string.split(",")]
-                print("Example:", " + ".join(nums[:-1]), "=", nums[-1])
+                sep = {"mult": "*", "add": "+"}[self.ds.op]
+                print("Example:", f" {sep} ".join(nums[:-1]), "=", nums[-1])
 
                 n = example.index(self.ds.end_token) + 1
                 prediction = self.generate(example[:n]).cpu().numpy()

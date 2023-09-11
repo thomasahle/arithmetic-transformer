@@ -41,15 +41,16 @@ def main():
     )
     parser.add_argument("--batch-size", type=int, default=2**10, help="Batch size")
     parser.add_argument(
-        "--num-examples", type=int, default=3, help="Number of examples to output"
-    )
-    parser.add_argument(
         "--kind",
         type=str,
-        default="lstm",
         help="The type of neural network to use (lstm, transformer, hybrid)",
     )
-    parser.add_argument("--tune-lr", action="store_true")
+    parser.add_argument(
+        "--op",
+        type=str,
+        default="add",
+        help="Operation to learn (add, mult)",
+    )
     parser.add_argument("--norm-last", action="store_true")
     parser.add_argument("--cpu", action="store_true")
     parser.add_argument(
@@ -64,6 +65,7 @@ def main():
         10**6,  # data points per epoch
         base=10,
         number_length=1,
+        op=args.op
     )
 
     model = AdditionModel(

@@ -79,11 +79,12 @@ def leading_zeros_to_padding_(digits, padding_token):
 
 class AdditionDataset:
     def __init__(
-        self, num_samples, base, number_length):
+        self, num_samples, base, number_length, op):
         self.num_samples = num_samples
         self.base = base
         self.number_length = number_length
         self.sequence_length = 2
+        self.op = op
 
         self.end_token = base  # After input
         self.separator_token = base + 1  # between inputs
@@ -96,14 +97,17 @@ class AdditionDataset:
 
     @property
     def max_output_length(self):
-        # Upper bound on total output length, including EOS token
-        max_number = self.sequence_length * self.base**self.number_length
-        return len(int_to_digits(max_number, self.base)) + 1
+        # Upper bound on total output number length, not including EOS
+        if self.op == 'add':
+            max_number = self.sequence_length * self.base ** self.number_length
+        elif self.op == 'mult':
+            max_number = self.base ** (self.number_length * self.sequence_length)
+        return len(int_to_digits(max_number, self.base))
 
     @property
     def seq(self):
-        # Upper bound on total length including inputs, outputs and separators
-        return self.max_input_length + self.max_output_length
+        # Upper bound on total length including inputs, outputs, separator and EOS
+        return self.max_input_length + self.max_output_length + 1
 
     def __len__(self):
         return self.num_samples
@@ -114,8 +118,13 @@ class AdditionDataset:
         in_digits0 = make_digits_random_length(bs, base, self.number_length)
         in_digits1 = make_digits_random_length(bs, base, self.number_length)
         # Add them together
-        sums = digits_to_numbers(in_digits0, base) + digits_to_numbers(in_digits1, base)
-        out_digits = numbers_to_digits(sums, base, max_length=self.number_length + 1)
+        numbers0 = digits_to_numbers(in_digits0, base)
+        numbers1 = digits_to_numbers(in_digits1, base)
+        if self.op == 'add':
+            res = numbers0 + numbers1
+        elif self.op == 'mult':
+            res = numbers0 * numbers1
+        out_digits = numbers_to_digits(res, base, max_length=self.max_output_length)
         # Replace leading 0s with padding
         leading_zeros_to_padding_(out_digits, self.padding_token)
         leading_zeros_to_padding_(in_digits0, self.padding_token)
