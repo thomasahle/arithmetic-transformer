@@ -16,10 +16,9 @@ def causal_mask(x):
 
 
 class AdditionModel(pl.LightningModule):
-    def __init__(self, kind, ds, batch_size, hidden_size, num_layers, num_heads, num_queries, lr, norm_first, grouped, is_cosine, norm_kvs, dropout, noise_rank):
+    def __init__(self, kind, ds, hidden_size, num_layers, num_heads, num_queries, lr, norm_first, grouped, is_cosine, norm_kvs, dropout, noise_rank):
         super().__init__()
         self.ds = ds  # Input the dataset for relevant parameters
-        self.batch_size = batch_size
         self.lr = lr
         self.hidden_size = hidden_size
         num_tokens = ds.base + 4  # 4 extra tokens for end, separator, padding, and eos
@@ -228,22 +227,22 @@ class AdditionModel(pl.LightningModule):
         # optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
-    def train_dataloader(self):
-        # Return a DataLoader for the newly created dataset.
-        # The idea is to make it bigger as we learn
-        return DataLoader(self.ds, batch_size=self.batch_size, num_workers=1)
+    # def train_dataloader(self):
+    #     # Return a DataLoader for the newly created dataset.
+    #     # The idea is to make it bigger as we learn
+    #     return DataLoader(self.ds, batch_size=self.batch_size, num_workers=1)
 
-    def val_dataloader(self):
-        # Make a smaller dataset for validation
-        print(f"Making validation dataloader with number_length={self.ds.number_length}")
-        dataset = AdditionDataset(
-            self.ds.num_samples // 10,
-            base=self.ds.base,
-            number_length=self.ds.number_length,
-            min_sequence_length=self.ds.sequence_length,
-            sequence_length=self.ds.sequence_length,
-        )
-        return DataLoader(dataset, batch_size=self.batch_size, num_workers=1)
+    # def val_dataloader(self):
+    #     # Make a smaller dataset for validation
+    #     print(f"Making validation dataloader with number_length={self.ds.number_length}")
+    #     dataset = AdditionDataset(
+    #         self.ds.num_samples // 10,
+    #         base=self.ds.base,
+    #         number_length=self.ds.number_length,
+    #         min_sequence_length=self.ds.sequence_length,
+    #         sequence_length=self.ds.sequence_length,
+    #     )
+    #     return DataLoader(dataset, batch_size=self.batch_size, num_workers=1)
 
     def on_validation_epoch_end(self):
         # Get the logged accuracy for the current epoch

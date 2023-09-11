@@ -44,7 +44,7 @@ def main():
         default=4,
         help="The number of layers for the neural network",
     )
-    parser.add_argument("--batch-size", type=int, default=2**8, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=2**10, help="Batch size")
     parser.add_argument(
         "--num-examples", type=int, default=3, help="Number of examples to output"
     )
@@ -79,7 +79,6 @@ def main():
 
     model = AdditionModel(
         ds=dataset,
-        batch_size=2**10,
         kind=args.kind,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,

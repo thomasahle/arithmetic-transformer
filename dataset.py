@@ -130,13 +130,6 @@ def digits_to_numbers(digits, base):
 def make_digits_random_length(bs, base, max_number_length):
     digits = torch.randint(base, (bs, max_number_length))
     n_digits = torch.randint(max_number_length, (bs,))
-    mask = torch.arange(max_number_length)[None] < n_digits[:, None]
-    digits[mask] = 0
-    return digits
-
-def make_digits_random_length(bs, base, max_number_length):
-    digits = torch.randint(base, (bs, max_number_length))
-    n_digits = torch.randint(max_number_length, (bs,))
     mask = torch.arange(max_number_length)[None].repeat(bs, 1) < n_digits[:, None]
     digits[mask] = 0
     return digits
