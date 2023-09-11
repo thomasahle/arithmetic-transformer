@@ -120,7 +120,7 @@ class AdditionModel(pl.LightningModule):
             emb = self.pos_emb(positions).permute(1, 0, 2).to(x.device)
             #x = self.model(x + emb, torch.zeros_like(x), tgt_mask=causal_mask(x))
             attn_mask = nn.Transformer.generate_square_subsequent_mask(x.shape[1], x.device)
-            x = self.model(x + emb, mask=mask, is_causal=True)
+            x = self.model(x + emb, mask=attn_mask, is_causal=True)
             # Add an extra linear layer, just becuase I'm doing this in myformer.
             x = self.fc(self.norm(x))
         elif self.kind == "hybrid":
