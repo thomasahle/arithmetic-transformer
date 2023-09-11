@@ -45,6 +45,11 @@ Each model in the table had roughly 32K parameters.
 | 8 | - | - | 12 | 6 |
 | 9 | - | - | 18 | 7 |
 | 10 | - | - | 15 | 3 |
+| 11 | - | - | 18 | 4 |
+| 12 | - | - | - | 2 |
+| 13 | - | - | - | 2 |
+| 14 | - | - | - | 2 |
+
 
 Roughly 130K parameters per model.
 
