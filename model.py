@@ -109,7 +109,7 @@ class AdditionModel(pl.LightningModule):
         # Note lstm assumes (seq, batch, feature)
         x = emb.permute(1, 0, 2)
 
-        if self.pos_emb.num_embeddings < x.size(0):
+        if hasattr(self, 'pos_emb') and self.pos_emb.num_embeddings < x.size(0):
             print(f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {x.size(0)}")
             with torch.no_grad():
                 new_pos_emb = nn.Embedding(x.size(0), self.pos_emb.embedding_dim).to(x.device)

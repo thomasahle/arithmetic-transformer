@@ -30,6 +30,7 @@ def main():
         help="Number of examples to generate and train on",
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam LR")
+    parser.add_argument("--acc-next", type=float, default=.9, help="Accuracy before next level")
     parser.add_argument("--dropout", type=float, default=0)
     parser.add_argument("--noise-rank", type=int, default=10)
     parser.add_argument(
@@ -158,7 +159,7 @@ def manual_training(model, dataset, args):
         acc = torch.mean(torch.tensor(accs))
         print(f"Validation acc: {acc}")
         print(sorted(time_to_success.items()))
-        if acc > .9:
+        if acc > args.acc_next:
             print(f"Switching to number length {dataset.number_length+1}")
             print(f"Took {time_to_success[dataset.number_length]} epochs")
             dataset.number_length += 1
