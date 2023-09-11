@@ -1,6 +1,11 @@
 import torch
 import einops
 import torch.nn as nn
+import torch.nn.functional as F
+
+def causal_mask(x):
+    # print(f'{x.shape=}')
+    return nn.Transformer.generate_square_subsequent_mask(x.shape[0], x.device)
 
 class BayesLinear(nn.Module):
     def __init__(self, input_dim, output_dim, stdv=0.1):
@@ -219,8 +224,8 @@ class MyAttention(nn.Module):
             # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
             # efficient attention using Flash Attention CUDA kernels
             # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
-
-            attn += mask
+            #print(attn.shape, mask.shape)
+            #attn += mask
             # compbine key dim with seq, getting (bs, h, seq2, seq1)
             attn = attn.flatten(2, 3)
             probs = torch.softmax(attn, dim=2)

@@ -87,6 +87,7 @@ class AdditionModel(pl.LightningModule):
                 num_layers // 2,
             )
         elif kind == "mlp":
+            # Note, the whole CausalMLP approach doesn't work when the sequence length can increase
             if num_layers == 1:
                 print("Warning, MLP doesn't support single layer")
             layers = [methods.TriangularLinear(hidden_size * seq), nn.ReLU()]
@@ -144,6 +145,7 @@ class AdditionModel(pl.LightningModule):
         x = x.permute(1, 0, 2)
         # Might as well reuse the embeddings
         return x @ self.embedding.weight.T
+
 
     def training_step(self, batch, batch_idx):
         # Mask of everything from end_token and to the right
@@ -288,7 +290,7 @@ class AdditionModel(pl.LightningModule):
             dic[self.ds.separator_token] = ','
             for example in self.ds.generate_batch(num_examples):
                 example = list(example.cpu().numpy())
-                print(example)
+                print('Data:   ', example)
                 # [list(group) for k, group in itertools.groupby(l, lambda x: x >= 2) if not k]
                 string = ''.join(dic[t] for t in example)
                 nums = [num for num in string.split(',')]
@@ -297,6 +299,5 @@ class AdditionModel(pl.LightningModule):
                 n = example.index(self.ds.end_token) + 1
                 prediction = self.generate(example[:n]).cpu().numpy()
                 string = ''.join(dic[t] for t in prediction)
-                print("Output: ", string, prediction)
-                print()
+                print("Output: ", string, '- Raw:', prediction)
 
