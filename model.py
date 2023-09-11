@@ -73,7 +73,7 @@ class AdditionModel(pl.LightningModule):
             self.norm = nn.LayerNorm(hidden_size)
             self.fc = nn.Linear(hidden_size, hidden_size)
         elif kind == "hybrid":
-            self.model1 = nn.GRU(
+            self.model1 = nn.LSTM(
                 input_size=hidden_size,
                 hidden_size=hidden_size,
                 num_layers=(num_layers + 1) // 2,
@@ -119,12 +119,15 @@ class AdditionModel(pl.LightningModule):
             positions = torch.arange(0, x.size(0)).unsqueeze(0).to(x.device)
             emb = self.pos_emb(positions).permute(1, 0, 2).to(x.device)
             #x = self.model(x + emb, torch.zeros_like(x), tgt_mask=causal_mask(x))
-            x = self.model(x + emb, mask=causal_mask(x), is_causal=True)
+            attn_mask = nn.Transformer.generate_square_subsequent_mask(x.shape[1], x.device)
+            x = self.model(x + emb, mask=mask, is_causal=True)
             # Add an extra linear layer, just becuase I'm doing this in myformer.
             x = self.fc(self.norm(x))
         elif self.kind == "hybrid":
             x, _ = self.model1(x)
-            x = self.model2(x, torch.zeros_like(x), tgt_mask=causal_mask(x))
+            #x = self.model2(x, torch.zeros_like(x), tgt_mask=causal_mask(x))
+            attn_mask = nn.Transformer.generate_square_subsequent_mask(x.shape[1], x.device)
+            x = self.model2(x, attn_mask, is_causal=True)
         elif self.kind == "mlp":
             x = self.model(emb.flatten(start_dim=1)).reshape(emb.shape)
             x = x.permute(1, 0, 2)
