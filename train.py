@@ -97,6 +97,7 @@ def main():
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'The model has {num_params} parameters')
 
+    # model = torch.compile(model)
     manual_training(model, dataset, args)
 
 def lightning_training(model, dataset, args):
@@ -112,6 +113,7 @@ def lightning_training(model, dataset, args):
         trainer = pl.Trainer(max_epochs=args.epochs, reload_dataloaders_every_n_epochs=1)
 
     trainer.fit(model)
+
 
 def manual_training(model, dataset, args):
     if args.cpu:
@@ -132,77 +134,58 @@ def manual_training(model, dataset, args):
     else:
         optimizer = optimizers
 
+    # Standard PyTorch Training Loop
     time_to_success = Counter()
-    while True:
-        running_acc = 0
-        for batch_idx in itertools.count():
-            model.train()
-            #for batch_idx in tqdm.tqdm(range(10)):
-            #for _ in range(10):
-            with torch.no_grad():
-                batch = dataset.generate_batch(args.batch_size).to(model.device)
-                mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1) & (batch != dataset.end_token)
-                mask = mask[:, 1:]
-            optimizer.zero_grad()
+    for epoch in range(args.epochs):
+        train_batches = 1000
+        with torch.no_grad():
+            X = dataset.generate_batch(args.batch_size * train_batches).to(model.device)
+            Xmask = (torch.cumsum(X == dataset.end_token, dim=1) == 1) & (X != dataset.end_token)
+            Xmask = Xmask[:, 1:]
 
+        # Training Loop
+        model.train()
+        for batch_idx in tqdm.tqdm(range(train_batches)):
+            batch = X[batch_idx*args.batch_size : (batch_idx+1)*args.batch_size]
+            mask = Xmask[batch_idx*args.batch_size : (batch_idx+1)*args.batch_size]
+
+            optimizer.zero_grad()
             truth = batch[:, 1:]
             out = model(batch)[:, :-1]
-            #print(out.shape, truth.shape)
-            #print(out[mask].shape, truth[mask].shape)
             loss = F.cross_entropy(out[mask], truth[mask])
-            #loss = F.cross_entropy(out.flatten(0,1), truth.flatten())
-            #loss = model.training_step(batch, batch_idx)
-
             loss.backward()
             optimizer.step()
 
-            model.eval()
-            with torch.no_grad():
+        model.print_examples(3)
+
+        # Validation Loop
+        accs = []
+        model.eval()
+        with torch.no_grad():
+            val_batches = 100
+            X = dataset.generate_batch(args.batch_size * val_batches).to(model.device)
+            Xmask = (torch.cumsum(X == dataset.end_token, dim=1) == 1) & (X != dataset.end_token)
+            Xmask = Xmask[:, 1:]
+
+            for batch_idx in tqdm.tqdm(range(val_batches)):
+                batch = X[batch_idx*args.batch_size : (batch_idx+1)*args.batch_size]
+                mask = Xmask[batch_idx*args.batch_size : (batch_idx+1)*args.batch_size]
+
                 truth2 = batch[:, 1:] * mask
                 out = model(batch)[:, :-1]
                 preds = torch.argmax(out, dim=2) * mask
                 acc = torch.all(preds == truth2, dim=1).float().mean()
+                accs.append(acc)
 
-                print(f'Acc: {acc:.3f}, Steps: {batch_idx}', end='\r')
-                if acc > args.acc_next:
-                    break
+        time_to_success[dataset.number_length] += 1
 
-            # model.eval()
-            # accs = []
-            # with torch.no_grad():
-            #     for batch_idx in tqdm.tqdm(range(100)):
-            #         batch = dataset.generate_batch(args.batch_size).to(model.device)
-            #         acc = model.validation_step(batch, batch_idx)
-            #         accs.append(acc)
-            # print(torch.tensor(accs).mean())
-
-            #model.eval()
-            #with torch.no_grad():
-            #    batch = dataset.generate_batch(args.batch_size).to(model.device)
-            #    mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1) & (batch != dataset.end_token)
-            #    mask = mask[:, 1:]
-            #    #print(mask)
-            #    truth2 = batch[:, 1:] * mask
-            #    #print(batch[:, 1:])
-            #    out = model(batch)[:, :-1]
-            #    preds = torch.argmax(out, dim=2) * mask
-            #    acc = torch.all(preds == truth2, dim=1).float().mean()
-
-            #    running_acc = .9 * running_acc + .1 * acc
-            #    print(f'Smooth Acc: {running_acc:.3f}, Acc: {acc:.3f}, Steps: {batch_idx}', end='\r')
-            #    if running_acc > args.acc_next:
-            #        break
-        print()
-
-        model.print_examples(3)
-        print()
-
-        time_to_success[dataset.number_length] = batch_idx
-
+        acc = torch.mean(torch.tensor(accs))
+        print(f"Validation acc: {acc}")
         print(sorted(time_to_success.items()))
-        print(f"Switching to number length {dataset.number_length+1}")
-        print(f"Took {time_to_success[dataset.number_length]} steps")
-        dataset.number_length += 1
+        if acc > args.acc_next:
+            print(f"Switching to number length {dataset.number_length+1}")
+            print(f"Took {time_to_success[dataset.number_length]} epochs")
+            dataset.number_length += 1
 
 
 if __name__ == "__main__":
