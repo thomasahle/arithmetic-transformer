@@ -8,7 +8,10 @@ Here is a summary of the number of epochs different models took to learn additio
 
 ### 4 layers, 32 hidden size
 The table shows the number of epochs needed to learn addition of `n` digits.
-E.g. the Hybrid model took just 7 epochs (6*10^6 examples) to learn 8 digit addition to 90% accuracy, after it had already learned 7 digit addition to 90% accuracy.
+E.g. the Hybrid model took just 7 epochs (7*10^6 examples) to learn 8 digit addition to 90% accuracy, after it had already learned 7 digit addition to 90% accuracy.
+
+To learn 14 digit addition, the hybrid model took a total of 293 epochs ~ 3*10^8 examples.
+This is of course much less than the total of different 10^28 possible input pairs.
 
 |Digits| Transformer | Transformer NoPE | LSTM | Hybrid |
 | --- | --- | --- | --- | --- |
