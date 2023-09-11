@@ -35,18 +35,24 @@ class AdditionDataset(Dataset):
         self.sequence_length = sequence_length
         self.min_sequence_length = min_sequence_length
 
-        # Upper bound on total length including inputs, outputs and separators
-        max_input_length = sequence_length * (number_length + 1)
-        # Upper bound on total output length, including EOS token
-        max_output_length = (
-            len(int_to_digits(sequence_length * base**number_length, base)) + 1
-        )
-        self.seq = max_input_length + max_output_length
-
         self.end_token = base  # After input
         self.separator_token = base + 1  # between inputs
         self.padding_token = base + 2  # Before input and after target
         self.eos_token = base + 3  # After target
+
+    @property
+    def max_input_length(self):
+        return self.sequence_length * (self.number_length + 1)
+
+    @property
+    def max_output_length(self):
+        # Upper bound on total output length, including EOS token
+        return len(int_to_digits(self.sequence_length * self.base**self.number_length, self.base)) + 1
+
+    @property
+    def seq(self):
+        # Upper bound on total length including inputs, outputs and separators
+        return self.max_input_length + self.max_output_length
 
     def __len__(self):
         return self.num_samples
