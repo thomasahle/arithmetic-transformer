@@ -60,6 +60,7 @@ def main():
     parser.add_argument("--cosine", action="store_true")
     parser.add_argument("--grouped", action="store_true")
     parser.add_argument("--norm-kvs", action="store_true")
+    parser.add_argument("--cpu", action="store_true")
     parser.add_argument("--num-heads", type=int, default=1, help="The number of heads/rank in transformer/mlp")
     parser.add_argument("--num-queries", type=int, default=1)
     parser.add_argument(
@@ -112,12 +113,15 @@ def lightning_training(model, dataset, args):
     trainer.fit(model)
 
 def manual_training(model, dataset, args):
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    elif torch.backends.mps.is_available():
-        device = torch.device('mps')
-    else:
+    if args.cpu:
         device = torch.device('cpu')
+    else:
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        elif torch.backends.mps.is_available():
+            device = torch.device('mps')
+        else:
+            device = torch.device('cpu')
     model = model.to(device)
 
     # Get optimizer (and potentially the scheduler)

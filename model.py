@@ -90,16 +90,16 @@ class AdditionModel(pl.LightningModule):
         elif kind == "mlp":
             if num_layers == 1:
                 print("Warning, MLP doesn't support single layer")
-            layers = [methods.CausalLinear(hidden_size * seq), nn.ReLU()]
+            layers = [methods.TriangularLinear(hidden_size * seq), nn.ReLU()]
             for _ in range(num_layers - 2):
-                layers.append(methods.CausalLinear(hidden_size * seq))
+                layers.append(methods.TriangularLinear(hidden_size * seq))
                 layers.append(nn.ReLU())
-            layers.append(methods.CausalLinear(hidden_size * seq))
+            layers.append(methods.TriangularLinear(hidden_size * seq))
             self.model = nn.Sequential(*layers)
         elif kind == "mlp2":
-            self.model = CausalMLP(num_layers, seq, hidden_size, rank=num_heads)
+            self.model = methods.CausalMLP(num_layers, seq, hidden_size, rank=num_heads)
         elif kind == "res":
-            self.model = ResNet(n_layers=num_layers, dim=hidden_size, groups=num_heads)
+            self.model = methods.ResNet(n_layers=num_layers, dim=hidden_size, groups=num_heads)
         else:
             raise Error(f"Kind {kind} is not supported")
 
@@ -188,18 +188,18 @@ class AdditionModel(pl.LightningModule):
         acc = torch.all(preds == truth2, dim=1).float().mean()
         self.log("val_acc", acc, prog_bar=True)
 
-        if self.kind == 'mlp2' and batch_idx == 0 and hasattr(self.logger.experiment, 'log'):
-            w2sum = 0
-            for i, block in enumerate(self.model.blocks):
-                for j, causal in enumerate(block.causals):
-                    w2 = causal.weight**2
-                    w2sum += w2
-                    wandb_img = wandb.Image(cm.hot(w2.cpu().numpy()), caption="Causal Norms")
-                    self.logger.experiment.log({f"causal norms {i} head {j}": wandb_img}, step=self.global_step)
+        # if self.kind == 'mlp2' and batch_idx == 0 and hasattr(self.logger.experiment, 'log'):
+        #     w2sum = 0
+        #     for i, block in enumerate(self.model.blocks):
+        #         for j, causal in enumerate(block.causals):
+        #             w2 = causal.weight**2
+        #             w2sum += w2
+        #             wandb_img = wandb.Image(cm.hot(w2.cpu().numpy()), caption="Causal Norms")
+        #             self.logger.experiment.log({f"causal norms {i} head {j}": wandb_img}, step=self.global_step)
 
-            w2sum /= len(self.model.blocks)
-            wandb_img = wandb.Image(cm.hot(w2sum.cpu().numpy()), caption="Causal Norms")
-            self.logger.experiment.log({"causal norms": wandb_img}, step=self.global_step)
+        #     w2sum /= len(self.model.blocks)
+        #     wandb_img = wandb.Image(cm.hot(w2sum.cpu().numpy()), caption="Causal Norms")
+        #     self.logger.experiment.log({"causal norms": wandb_img}, step=self.global_step)
 
         return acc
 
