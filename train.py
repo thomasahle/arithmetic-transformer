@@ -149,7 +149,7 @@ def manual_training(model, dataset, args):
         accs = []
         model.eval()
         with torch.no_grad():
-            for batch_idx in tqdm.tqdm(range(10)):
+            for batch_idx in tqdm.tqdm(range(10**2)):
                 batch = dataset.generate_batch(args.batch_size).to(model.device)
                 acc = model.validation_step(batch, batch_idx)
                 accs.append(acc)

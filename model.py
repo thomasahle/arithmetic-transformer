@@ -112,9 +112,10 @@ class AdditionModel(pl.LightningModule):
 
         if self.pos_emb.num_embeddings < x.size(0):
             print(f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {x.size(0)}")
-            new_pos_emb = nn.Embedding(x.size(0), self.pos_emb.embedding_dim)
-            new_pos_emb[:self.pos_emb.num_embeddings] = self.pos_emb.weight
-            self.pos_emb = new_pos_emb
+            with torch.no_grad():
+                new_pos_emb = nn.Embedding(x.size(0), self.pos_emb.embedding_dim).to(x.device)
+                new_pos_emb.weight[:self.pos_emb.num_embeddings] = self.pos_emb.weight
+                self.pos_emb = new_pos_emb
 
         if self.kind in ("lstm", "rnn", "gru"):
             x, _ = self.model(x)
