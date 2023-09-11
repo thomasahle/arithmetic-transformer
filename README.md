@@ -1,6 +1,6 @@
 # Learning Arithmetic with Sequence Models
 This repository contains code for training neural networks to learn the process of addition.
-We experiment with different causal neural network architectures like LSTM, Transformer, and a hybrid model.
+We experiment with different causal neural network architectures like LSTM, Transformer, and a hybrid model which is *half LSTM, half Transformer*.
 The primary focus of this project is to compare how quickly different models learn to add numbers with varying digit lengths.
 
 ## Results
