@@ -4,13 +4,12 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.tuner import Tuner
 import wandb
-from matplotlib import cm
 from collections import OrderedDict
-import einops
 import inspect
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import tqdm
+from collections import Counter
 
 from dataset import AdditionDataset
 from model import AdditionModel
@@ -27,7 +26,7 @@ def main():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=10,
+        default=1000,
         help="Number of examples to generate and train on",
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam LR")
@@ -125,11 +124,12 @@ def manual_training(model, dataset, args):
         optimizer = optimizers
 
     # Standard PyTorch Training Loop
+    time_to_success = Counter()
     for epoch in range(args.epochs):
         # Training Loop
         model.train()
         for batch_idx in tqdm.tqdm(range(10**3)):
-            batch = dataset.generate_batch(10**3).to(model.device)
+            batch = dataset.generate_batch(args.batch_size).to(model.device)
             optimizer.zero_grad()
             loss = model.training_step(batch, batch_idx)
             loss.backward()
@@ -142,15 +142,18 @@ def manual_training(model, dataset, args):
         model.eval()
         with torch.no_grad():
             for batch_idx in tqdm.tqdm(range(10)):
-                batch = dataset.generate_batch(10**3).to(model.device)
+                batch = dataset.generate_batch(args.batch_size).to(model.device)
                 acc = model.validation_step(batch, batch_idx)
                 accs.append(acc)
 
+        time_to_success[dataset.number_length] += 1
 
         acc = torch.mean(torch.tensor(accs))
         print(f"Validation acc: {acc}")
         if acc > .9:
             print(f"Switching to number length {dataset.number_length+1}")
+            print(f"Took {time_to_success[dataset.number_length]} epochs")
+            print(sorted(time_to_success.items()))
             dataset.number_length += 1
 
 
