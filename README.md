@@ -6,7 +6,7 @@ The primary focus of this project is to compare how quickly different models lea
 ## Results
 Here is a summary of the number of epochs different models took to learn addition with various digit lengths:
 
-### 4 layers, 32 hidden size
+### 4 layers, 32 hidden size, 1 head
 The table shows the number of epochs needed to learn addition of `n` digits.
 E.g. the Hybrid model took just 7 epochs (7*10^6 examples) to learn 8 digit addition to 90% accuracy, after it had already learned 7 digit addition to 90% accuracy.
 
@@ -32,31 +32,31 @@ This is of course much less than the total of different 10^28 possible input pai
 
 Each model in the table had roughly 32K parameters.
 
-### 4 layers, 64 hidden size
+### 4 layers, 64 hidden size, 4 heads
 
 Increasing the model sizes just slightly allowed the model to learn multi-digit addition much faster.
 The hybrid model got up to 18 digits with just a few epochs per digit, before something finally broke during the 19 digit training and accuracy fell to near 0.
 
-|Digits| T. Learned | T. Sine | T. NoPE | LSTM | Hybrid |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | 1 | 1 | 1 |
-| 2 | 1 | 1 | 2 | 2 | 1 |
-| 3 | 2 | 1 | 2 | 3 | 2 |
-| 4 | 3 | 1 | 2 | 5 | 2 |
-| 5 | 3 | 1 | 5 | 10 | 5 |
-| 6 | 4 | 2 | 9 | 15 | 5 |
-| 7 | 33 | 2 | 18 | 11 | 5 |
-| 8 | 45 | 5 | 42 | 12 | 6 |
-| 9 | - | 2 | - | 18 | 7 |
-| 10 | - | 3 | - | 15 | 3 |
-| 11 | - | 4 | - | 18 | 4 |
-| 12 | - | 5 | - | 21 | 2 |
-| 13 | - | 4 | - | 30 | 2 |
-| 14 | - | 10 | - | - | 2 |
-| 15 | - | 8 | - | - | 5 |
-| 16 | - | 9 | - | - | 1 |
-| 17 | - | 17 | - | - | 2 |
-| 18 | - | 14+ | - | - | 3 |
+|Digits| T. Learned | T. Sine | T. NoPE | T. LSTM | LSTM | Hybrid |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 1 | 1 | - | 1 | 1 |
+| 2 | 1 | 1 | 2 | - | 2 | 1 |
+| 3 | 2 | 1 | 2 | - | 3 | 2 |
+| 4 | 3 | 1 | 2 | - | 5 | 2 |
+| 5 | 3 | 1 | 5 | - | 10 | 5 |
+| 6 | 4 | 2 | 9 | - | 15 | 5 |
+| 7 | 33 | 2 | 18 | - | 11 | 5 |
+| 8 | 45 | 5 | 42 | - | 12 | 6 |
+| 9 | - | 2 | - | - | 18 | 7 |
+| 10 | - | 3 | - | - | 15 | 3 |
+| 11 | - | 4 | - | - | 18 | 4 |
+| 12 | - | 5 | - | - | 21 | 2 |
+| 13 | - | 4 | - | - | 30 | 2 |
+| 14 | - | 10 | - | - | - | 2 |
+| 15 | - | 8 | - | - | - | 5 |
+| 16 | - | 9 | - | - | - | 1 |
+| 17 | - | 17 | - | - | - | 2 |
+| 18 | - | 14+ | - | - | - | 3 |
 
 Roughly 130K parameters per model.
 
