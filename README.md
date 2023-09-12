@@ -51,7 +51,7 @@ The hybrid model got up to 18 digits with just a few epochs per digit, before so
 | 10 | - | - | 15 | 3 |
 | 11 | - | - | 18 | 4 |
 | 12 | - | - | 21 | 2 |
-| 13 | - | - | - | 2 |
+| 13 | - | - | 30 | 2 |
 | 14 | - | - | - | 2 |
 | 15 | - | - | - | 5 |
 | 16 | - | - | - | 1 |
