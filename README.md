@@ -132,6 +132,8 @@ Not having embeddings was a bit better than the additive positional embeddings, 
 
 ## More Results
 
+### Multiplication
+
 I also trained some 800K parameter models to learn multiplication.
 Each one is 6 layers, 4 hears, 128 hidden size and 1% dropout.
 
@@ -145,3 +147,44 @@ Each one is 6 layers, 4 hears, 128 hidden size and 1% dropout.
 |   6    |     -      |    -    |  122+   |    -    |   -   |   -    |
 
 Surprisingly the position encoding less transformer does best here, though it's possible the Transformer with LSTM on the first layer would have done as well, if I had let it run as long.
+
+### Division, DivMod
+
+| Digits | T. LSTM | T. Sine |
+|:------:|:-------:|:-------:|
+|   1    |    1    |    1    |
+|   2    |    1    |    1    |
+|   3    |    3    |    3    |
+|   4    |    8    |   10    |
+|   5    |   22    |   45    |
+|   6    |   53    |   74    |
+|   7    |  123    |  156    |
+|   8    |   21+    |    2+    |
+
+Example outputs from training:```
+Example: 715564 / 22242 = 32.3820
+Output:  32.3820 (Correct)
+Example: 8711 / 816706 = 0.8711
+Output:  0.8711 (Correct)
+Example: 35173 / 6 = 5862.1
+Output:  5862.1 (Correct)
+```
+
+### Division, SqDiv
+
+| Digits | T. LSTM | T. Sine |
+|:------:|:-------:|:-------:|
+|   1    |    1    |    1    |
+|   2    |    2    |    2    |
+|   3    |  179    |  281    |
+|   4    |   23+    |  101+    |
+
+Example outputs from training:
+```
+Example: 282^2 / 1640 = 48   
+Output:  48 (Correct)        
+Example: 7^2 / 112 = 0       
+Output:  0 (Correct)         
+Example: 8287^2 / 920 = 74646
+Output:  74660 (Wrong)       
+```
