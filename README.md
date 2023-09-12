@@ -120,3 +120,9 @@ Where `d, ...` and `e, ...` are the numbers to be added, and `f, ...` is the sum
 SEP, END, EOS and PAD are extra tokens, representing "+", "=" and extra padding to align examples of different lengths.
 All numbers are in most significant digit first order.
 Doing least significant digit first makes the problem easier, but less realistic for real world text.
+
+### Positional encoding
+
+Since the input size can in principle grow without limit, I had to decide how to do positional encoding in the transformers.
+I tried not using positional encoding at all (NoPE), and using an nn.Embedding where I simply added new vectors as needed.
+Not having embeddings was a bit better than the additive positional embeddings, but the best results came from using an LSTM for the first two layers, and then switch to a transformer for the top 2. I called this the "hybrid" method.
