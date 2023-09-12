@@ -13,22 +13,22 @@ E.g. the Hybrid model took just 7 epochs (7*10^6 examples) to learn 8 digit addi
 To learn 14 digit addition, the hybrid model took a total of 293 epochs ~ 3*10^8 examples.
 This is of course much less than the total of different 10^28 possible input pairs.
 
-|Digits| Transformer Learned | Transformer Sine | Transformer NoPE | LSTM | Hybrid |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | 1 | 1 | 1 |
-| 2 | 1 | 2 | 3 | 2 | 2 |
-| 3 | 2 | 3 | 4 | 7 | 3 |
-| 4 | 21 | 6 | 8 | 11 | 5 |
-| 5 | 16 | 5 | 15 | 24 | 8 |
-| 6 | 81 | 9 | 33 | 59 | 9 |
-| 7 | 270+ | 7 | 82 | 52 | 8 |
-| 8 | - | 15 | 282 | - | 7 |
-| 9 | - | 27 | - | - | 11 |
-| 10 | - | 42 | - | - | 20 |
-| 11 | - | - | - | - | 33 |
-| 12 | - | - | - | - | 34 |
-| 13 | - | - | - | - | 48 |
-| 14 | - | - | - | - | 103 |
+|Digits| Transformer Learned | Transformer Sine | Transformer NoPE | Transformer LSTM | LSTM | Hybrid |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 1 | 1 | - | 1 | 1 |
+| 2 | 1 | 2 | 3 | - | 2 | 2 |
+| 3 | 2 | 3 | 4 | - | 7 | 3 |
+| 4 | 21 | 6 | 8 | - | 11 | 5 |
+| 5 | 16 | 5 | 15 | - | 24 | 8 |
+| 6 | 81 | 9 | 33 | - | 59 | 9 |
+| 7 | 270+ | 7 | 82 | - | 52 | 8 |
+| 8 | - | 15 | 282 | - | - | 7 |
+| 9 | - | 27 | - | - | - | 11 |
+| 10 | - | 42 | - | - | - | 20 |
+| 11 | - | 44 | - | - | - | 33 |
+| 12 | - | - | - | - | - | 34 |
+| 13 | - | - | - | - | - | 48 |
+| 14 | - | - | - | - | - | 103 |
 
 Each model in the table had roughly 32K parameters.
 
