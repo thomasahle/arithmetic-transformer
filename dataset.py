@@ -90,6 +90,7 @@ class AdditionDataset:
         self.separator_token = base + 1  # between inputs
         self.padding_token = base + 2  # Before input and after target
         self.eos_token = base + 3  # After target
+        self.dot_token = base + 4  # Decimal separator
 
     @property
     def max_input_length(self):
@@ -102,6 +103,12 @@ class AdditionDataset:
             max_number = self.sequence_length * self.base ** self.number_length
         elif self.op == 'mult':
             max_number = self.base ** (self.number_length * self.sequence_length)
+        elif self.op == 'div100':
+            max_number = self.base ** self.number_length * 100
+        elif self.op == 'sqdiv':
+            max_number = (self.base ** self.number_length - 1) ** 2
+        elif self.op == 'divmod':
+            return 2 * self.number_length + 1
         return len(int_to_digits(max_number, self.base))
 
     @property
@@ -120,13 +127,28 @@ class AdditionDataset:
         # Add them together
         numbers0 = digits_to_numbers(in_digits0, base)
         numbers1 = digits_to_numbers(in_digits1, base)
-        if self.op == 'add':
-            res = numbers0 + numbers1
-        elif self.op == 'mult':
-            res = numbers0 * numbers1
-        out_digits = numbers_to_digits(res, base, max_length=self.max_output_length)
+        if self.op == 'divmod':
+            numbers1 = torch.clip(numbers1, min=1)
+            res0 = numbers_to_digits(numbers0 // numbers1, base, max_length=self.number_length)
+            res1 = numbers_to_digits(numbers0 % numbers1, base, max_length=self.number_length)
+            leading_zeros_to_padding_(res0, self.padding_token)
+            leading_zeros_to_padding_(res1, self.padding_token)
+            out_digits = torch.cat([res0, torch.full((bs, 1), self.dot_token), res1], dim=1)
+        else:
+            if self.op == 'add':
+                res = numbers0 + numbers1
+            elif self.op == 'mult':
+                res = numbers0 * numbers1
+            elif self.op == 'div100':
+                numbers1 = torch.clip(numbers1, min=1)
+                res = numbers0 * 100 // numbers1
+            elif self.op == 'sqdiv':
+                numbers1 = torch.clip(numbers1, min=1)
+                res = numbers0 ** 2 // numbers1
+            out_digits = numbers_to_digits(res, base, max_length=self.max_output_length)
+            leading_zeros_to_padding_(out_digits, self.padding_token)
+
         # Replace leading 0s with padding
-        leading_zeros_to_padding_(out_digits, self.padding_token)
         leading_zeros_to_padding_(in_digits0, self.padding_token)
         leading_zeros_to_padding_(in_digits1, self.padding_token)
 
@@ -142,5 +164,21 @@ class AdditionDataset:
             dim=1,
         )
         res = move_padding_to_end(res, self.padding_token)
+        assert res.shape[1] == self.seq, (res.shape, self.seq)
         return res
+
+    def repr_example(self, example):
+        dic = {i: str(i) for i in range(self.base + 1)}
+        dic[self.padding_token] = ""
+        dic[self.end_token] = " = "
+        dic[self.eos_token] = ""
+        dic[self.separator_token] = {
+                "mult": " * ",
+                "add": " + ",
+                "div100": " / ",
+                "divmod": " / ",
+                "sqdiv": "^2 / ",
+            }[self.op]
+        dic[self.dot_token] = "."
+        return "".join(dic[token.item()] for token in example)
 

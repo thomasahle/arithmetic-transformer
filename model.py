@@ -199,7 +199,7 @@ class AdditionModel(nn.Module):
         input_sequence = torch.cat(
             [
                 torch.tensor(input_sequence),
-                torch.tensor([self.ds.padding_token] * (self.ds.seq - n), dtype=int),
+                torch.full((self.ds.seq - n,), self.ds.padding_token),
             ]
         ).to(self.embedding.weight.device)
         with torch.no_grad():
@@ -211,20 +211,13 @@ class AdditionModel(nn.Module):
 
     def print_examples(self, num_examples=3):
         with torch.no_grad():
-            dic = {i: str(i) for i in range(self.ds.base + 1)}
-            dic[self.ds.padding_token] = ""
-            dic[self.ds.end_token] = ","
-            dic[self.ds.eos_token] = ""
-            dic[self.ds.separator_token] = ","
             for example in self.ds.generate_batch(num_examples):
-                example = list(example.cpu().numpy())
-                print("Data:   ", example)
-                string = "".join(dic[t] for t in example)
-                nums = [num for num in string.split(",")]
-                sep = {"mult": "*", "add": "+"}[self.ds.op]
-                print("Example:", f" {sep} ".join(nums[:-1]), "=", nums[-1])
-
-                n = example.index(self.ds.end_token) + 1
-                prediction = self.generate(example[:n]).cpu().numpy()
-                string = "".join(dic[t] for t in prediction)
-                print("Output: ", string, "- Raw:", prediction)
+                print("Raw:    ", example.tolist())
+                print("Example:", self.ds.repr_example(example))
+                # Cut answer off example, and generate an answer using the model instead:
+                n = example.tolist().index(self.ds.end_token) + 1
+                true_answer = example[n:]
+                raw_prediction = self.generate(example[:n]).cpu()
+                verdict = "Correct" if torch.all(true_answer == raw_prediction) else "Wrong"
+                print("Output: ", self.ds.repr_example(raw_prediction), f"({verdict})")
+                print("Raw Out:", raw_prediction.tolist())
