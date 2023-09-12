@@ -158,11 +158,10 @@ def manual_training(model, dataset, args):
         time_to_success[dataset.number_length] += 1
 
         acc = torch.mean(torch.tensor(accs))
-        print(f"Validation acc: {acc}")
-        print(sorted(time_to_success.items()))
+        print(f"Validation acc: {acc:.5}")
+        print("Epochs per digit:", sorted(time_to_success.items()))
         if acc > args.acc_next:
             print(f"Switching to number length {dataset.number_length+1}")
-            print(f"Took {time_to_success[dataset.number_length]} epochs")
             dataset.number_length += 1
 
 

@@ -6,6 +6,33 @@ from torch.utils.data import DataLoader, random_split
 from dataset import AdditionDataset
 
 
+def sinusoidal_position_embeddings(seq_length, d_model):
+    """
+    Args:
+    - seq_length (int): The length of the sequence for which position embeddings are required.
+    - d_model (int): Dimension of the model (embedding size).
+
+    Returns:
+    - position_embeddings (Tensor): Sinusoidal position embeddings of shape (seq_length, d_model).
+    """
+
+    # Create a matrix of positions
+    position = torch.arange(seq_length).unsqueeze(1).float()  # shape: [seq_length, 1]
+
+    # Create a matrix of dimension indices
+    div_term = torch.exp(
+        torch.arange(0, d_model, 2).float()
+        * -(torch.log(torch.tensor(10000.0)) / d_model)
+    )  # shape: [d_model/2]
+
+    # Compute sinusoidal position embeddings
+    position_embeddings = torch.empty(seq_length, d_model)
+    position_embeddings[:, 0::2] = torch.sin(position * div_term)
+    position_embeddings[:, 1::2] = torch.cos(position * div_term)
+
+    return position_embeddings
+
+
 class AdditionModel(nn.Module):
     def __init__(
         self,
@@ -32,6 +59,7 @@ class AdditionModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 dropout=dropout,
+                batch_first=True,
             )
         elif kind == "rnn":
             self.model = nn.RNN(
@@ -39,6 +67,7 @@ class AdditionModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 dropout=dropout,
+                batch_first=True,
             )
         elif kind == "gru":
             self.model = nn.GRU(
@@ -46,9 +75,11 @@ class AdditionModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 dropout=dropout,
+                batch_first=True,
             )
-        elif kind in ("transformer", "transformer-nope"):
-            self.pos_emb = nn.Embedding(seq, hidden_size)
+        elif kind.startswith("transformer"):
+            if kind == "transformer":
+                self.pos_emb = nn.Embedding(seq, hidden_size)
             self.model = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(
                     d_model=hidden_size,
@@ -56,17 +87,17 @@ class AdditionModel(nn.Module):
                     nhead=num_heads,
                     norm_first=norm_first,
                     dropout=dropout,
+                    batch_first=True,
                 ),
                 num_layers,
             )
-            self.norm = nn.LayerNorm(hidden_size)
-            self.fc = nn.Linear(hidden_size, hidden_size)
         elif kind == "hybrid":
             self.model1 = nn.LSTM(
                 input_size=hidden_size,
                 hidden_size=hidden_size,
                 num_layers=(num_layers + 1) // 2,
                 dropout=dropout,
+                batch_first=True,
             )
             self.model2 = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(
@@ -75,52 +106,44 @@ class AdditionModel(nn.Module):
                     nhead=num_heads,
                     norm_first=norm_first,
                     dropout=dropout,
+                    batch_first=True,
                 ),
                 num_layers // 2,
             )
         else:
             raise Error(f"Kind {kind} is not supported")
+        self.norm = nn.LayerNorm(hidden_size)
+        self.fc = nn.Linear(hidden_size, hidden_size)
 
     def forward(self, x):
         # x.shape = (batch, seq)
-        emb = self.embedding(x)
-        # emb.shape = (batch, seq, dim)
-        # Note lstm assumes (seq, batch, feature)
-        x = emb.permute(1, 0, 2)
-
-        if hasattr(self, "pos_emb") and self.pos_emb.num_embeddings < x.size(0):
-            print(
-                f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {x.size(0)}"
-            )
-            with torch.no_grad():
-                new_pos_emb = nn.Embedding(x.size(0), self.pos_emb.embedding_dim).to(
-                    x.device
-                )
-                new_pos_emb.weight[: self.pos_emb.num_embeddings] = self.pos_emb.weight
-                self.pos_emb = new_pos_emb
+        x = self.embedding(x)
+        bs, seq, dim = x.shape
 
         if self.kind in ("lstm", "rnn", "gru"):
             x, _ = self.model(x)
-        elif self.kind in ("transformer", "transformer-nope"):
-            positions = torch.arange(0, x.size(0)).unsqueeze(0).to(x.device)
-            if self.kind != "transformer-nope":
-                emb = self.pos_emb(positions).permute(1, 0, 2).to(x.device)
+        elif self.kind.startswith("transformer"):
+            if self.kind == "transformer":
+                if self.pos_emb.num_embeddings < seq:
+                    print(f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {seq}")
+                    with torch.no_grad():
+                        new_pos_emb = nn.Embedding(seq, self.pos_emb.embedding_dim).to(x.device)
+                        # Copy old positional embeddings
+                        new_pos_emb.weight[: self.pos_emb.num_embeddings] = self.pos_emb.weight
+                        self.pos_emb = new_pos_emb
+                positions = torch.arange(seq).unsqueeze(0).to(x.device)
+                emb = self.pos_emb(positions).to(x.device)
                 x = x + emb
-            attn_mask = nn.Transformer.generate_square_subsequent_mask(
-                x.shape[1], x.device
-            )
+            elif self.kind == "transformer-sine":
+                emb = sinusoidal_position_embeddings(seq, dim).to(x.device)
+                x = x + emb
+            attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model(x, mask=attn_mask, is_causal=True)
-            x = self.fc(self.norm(x))
         elif self.kind == "hybrid":
             x, _ = self.model1(x)
-            attn_mask = nn.Transformer.generate_square_subsequent_mask(
-                x.shape[1], x.device
-            )
+            attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model2(x, attn_mask, is_causal=True)
-        # Re-permute to (batch, seq, dim)
-        x = x.permute(1, 0, 2)
-        # Might as well reuse the embeddings
-        return x @ self.embedding.weight.T
+        return self.fc(self.norm(x))
 
     def configure_optimizers(self):
         param_dict = {pn: p for pn, p in self.named_parameters() if p.requires_grad}
