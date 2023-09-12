@@ -77,6 +77,24 @@ class AdditionModel(nn.Module):
                 dropout=dropout,
                 batch_first=True,
             )
+        elif kind == "transformer-lstm":
+            self.base = nn.LSTM(
+                input_size=hidden_size,
+                hidden_size=hidden_size,
+                num_layers=1,
+                batch_first=True,
+            )
+            self.model = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=hidden_size,
+                    dim_feedforward=hidden_size * 2,
+                    nhead=num_heads,
+                    norm_first=norm_first,
+                    dropout=dropout,
+                    batch_first=True,
+                ),
+                num_layers - 1,
+            )
         elif kind.startswith("transformer"):
             if kind == "transformer":
                 self.pos_emb = nn.Embedding(seq, hidden_size)
@@ -137,6 +155,8 @@ class AdditionModel(nn.Module):
             elif self.kind == "transformer-sine":
                 emb = sinusoidal_position_embeddings(seq, dim).to(x.device)
                 x = x + emb
+            elif self.kind == "transformer-lstm":
+                x, _ = self.base(x)
             attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model(x, mask=attn_mask, is_causal=True)
         elif self.kind == "hybrid":
