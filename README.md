@@ -150,6 +150,11 @@ Surprisingly the position encoding less transformer does best here, though it's 
 
 ### Division, DivMod
 
+Next I trained the models to perform division of `n` digits integers.
+The model had to output the integer division (truncated) and the remainder.
+E.g. 715564 / 22242 = 32 + 3820 / 22242.
+I used only the two best models from the previous run: 800K parameter transformers with respectively lstm and sinusoidal positional encodings.
+
 | Digits | T. LSTM | T. Sine |
 |:------:|:-------:|:-------:|
 |   1    |    1    |    1    |
@@ -161,7 +166,8 @@ Surprisingly the position encoding less transformer does best here, though it's 
 |   7    |  123    |  156    |
 |   8    |   21+    |    2+    |
 
-Example outputs from training:```
+Example outputs from training:
+```
 Example: 715564 / 22242 = 32.3820
 Output:  32.3820 (Correct)
 Example: 8711 / 816706 = 0.8711
@@ -171,6 +177,9 @@ Output:  5862.1 (Correct)
 ```
 
 ### Division, SqDiv
+
+In this task the models had to compute `x^2/y`, where `x` and `y` are `n`-digit integers.
+This turned out to be a lot harder the the div-mod task above.
 
 | Digits | T. LSTM | T. Sine |
 |:------:|:-------:|:-------:|
