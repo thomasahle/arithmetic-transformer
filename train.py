@@ -85,9 +85,8 @@ def main():
 def answer_mask(dataset, batch):
     """Creates a mask of everything after the END (or =) token, which separates the question
     from the answer."""
-    mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1) & (
-        batch != dataset.end_token
-    )
+    mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1)
+    mask &= (batch != dataset.end_token)
     return mask[:, 1:]
 
 
@@ -105,10 +104,30 @@ def validation_step(model, batch):
     We only consider a question corectly solved if every single token is correctly predicted,
     including the padding."""
     mask = answer_mask(model.ds, batch)
-    truth2 = batch[:, 1:] * mask
+    truth2 = batch[:, 1:]
     out = model(batch)[:, :-1]
-    preds = torch.argmax(out, dim=2) * mask
-    return torch.all(preds == truth2, dim=1).float().mean()
+    preds = torch.argmax(out, dim=2)
+
+    # If we are getting the answer wrong, preds may have a different
+    # value from what we'd get with generate.
+    # But if we are getting the answer right, they should be the same.
+    # And if we are getting the answer wrong, they should both be wrong.
+
+    for i in range(1):
+        n = batch[i].tolist().index(model.ds.end_token) + 1
+        true = batch[i, n:]
+        pred0 = preds[i, n-1:]
+        pred1 = model.generate(batch[i][:n])
+        if torch.all((preds * mask)[i] == (truth2 * mask)[i]):
+            assert torch.all(pred0 == true)
+            # If we are getting the answer right, they should be the same.
+            assert torch.all(pred0 == pred1)
+        else:
+            # If we are getting the answer wrong, they should both be wrong.
+            assert not torch.all(pred0 == true)
+            assert not torch.all(pred1 == true)
+
+    return torch.all(preds * mask == truth2 * mask, dim=1).float().mean()
 
 
 def manual_training(model, dataset, args):
@@ -141,8 +160,6 @@ def manual_training(model, dataset, args):
             loss.backward()
             optimizer.step()
 
-        model.print_examples(3)
-
         # Validation Loop
         accs = []
         model.eval()
@@ -154,11 +171,15 @@ def manual_training(model, dataset, args):
                 batch = val_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
                 acc = validation_step(model, batch)
                 accs.append(acc)
+        acc = torch.mean(torch.tensor(accs))
+        print(f"Validation acc: {acc:.5}")
+
+        # Print some examples. Try to always include an example where the model is wrong.
+        # But if the model is nearly perfect, don't bother, since we might search forever.
+        model.print_examples(3, must_include_a_wrong=acc<args.acc_next)
 
         time_to_success[dataset.number_length] += 1
 
-        acc = torch.mean(torch.tensor(accs))
-        print(f"Validation acc: {acc:.5}")
         print("Epochs per digit:", sorted(time_to_success.items()))
         if acc > args.acc_next:
             print(f"Switching to number length {dataset.number_length+1}")

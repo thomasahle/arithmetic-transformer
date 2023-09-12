@@ -1,4 +1,5 @@
 import torch
+from torch.distributions.geometric import Geometric
 
 
 def int_to_digits(n, base):
@@ -45,7 +46,8 @@ def digits_to_numbers(digits, base):
 
 def make_digits_random_length(bs, base, max_number_length):
     digits = torch.randint(base, (bs, max_number_length))
-    n_digits = torch.randint(max_number_length, (bs,))
+    # n_digits = torch.randint(max_number_length, (bs,))
+    n_digits = Geometric(.5).sample((bs,)).clip(max=max_number_length-1)
     mask = torch.arange(max_number_length)[None].repeat(bs, 1) < n_digits[:, None]
     digits[mask] = 0
     return digits

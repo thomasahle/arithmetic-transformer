@@ -185,20 +185,21 @@ class AdditionModel(nn.Module):
         )
         return optimizer
 
+    @torch.no_grad()
     def generate(self, input_sequence):
         # Generate output sequence from input sequence using trained model
         # TODO: We use greedy digit-by-digit generation. It's possible the models
         # would perform a bit better if we instead used beam search to pick the most
         # likely overall result.
-        assert input_sequence[-1] == self.ds.end_token
+        assert input_sequence[-1] == self.ds.end_token, "Input should end with ="
         # Pad to expected length
         n = len(input_sequence)
         input_sequence = torch.cat(
             [
-                torch.tensor(input_sequence),
-                torch.full((self.ds.seq - n,), self.ds.padding_token),
+                input_sequence,
+                torch.full((self.ds.seq - n,), self.ds.padding_token, device=input_sequence.device),
             ]
-        ).to(self.embedding.weight.device)
+        )
         with torch.no_grad():
             for i in range(n, self.ds.seq):
                 output_logits = self(input_sequence[None])[0, i - 1]
@@ -206,15 +207,23 @@ class AdditionModel(nn.Module):
                 input_sequence[i] = token
         return input_sequence[n:]
 
-    def print_examples(self, num_examples=3):
-        with torch.no_grad():
-            for example in self.ds.generate_batch(num_examples):
-                print("Example:", self.ds.repr_example(example))
-                # Cut answer off example, and generate an answer using the model instead:
-                n = example.tolist().index(self.ds.end_token) + 1
-                true_answer = example[n:]
-                raw_prediction = self.generate(example[:n]).cpu()
-                verdict = "Correct" if torch.all(true_answer == raw_prediction) else "Wrong"
-                print("Output: ", self.ds.repr_example(raw_prediction), f"({verdict})")
-                print("Raw In: ", example.tolist())
-                print("Raw Out:", raw_prediction.tolist())
+    @torch.no_grad()
+    def print_examples(self, num_examples=3, must_include_a_wrong=False):
+        examples = self.ds.generate_batch(num_examples).to(self.embedding.weight.device)
+        i = 0
+        while i < num_examples:
+            example = examples[i]
+            # Cut answer off example, and generate an answer using the model instead:
+            n = example.tolist().index(self.ds.end_token) + 1
+            true_answer = example[n:]
+            raw_prediction = self.generate(example[:n])
+            is_correct = torch.all(true_answer == raw_prediction)
+            # Get at least one wrong example each time
+            if is_correct and i == num_examples - 1 and must_include_a_wrong:
+                examples[i] = self.ds.generate_batch(1)[0]
+                continue
+            print("Example:", self.ds.repr_example(example))
+            print("Output: ", self.ds.repr_example(raw_prediction), f"({'Correct' if is_correct else 'Wrong'})")
+            print("Raw In: ", example.tolist())
+            print("Raw Out:", raw_prediction.tolist())
+            i += 1
