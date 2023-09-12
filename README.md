@@ -33,6 +33,10 @@ This is of course much less than the total of different 10^28 possible input pai
 Each model in the table had roughly 32K parameters.
 
 ### 4 layers, 64 hidden size
+
+Increasing the model sizes just slightly allowed the model to learn multi-digit addition much faster.
+The hybrid model got up to 18 digits with just a few epochs per digit, before something finally broke during the 19 digit training and accuracy fell to near 0.
+
 |Digits| Transformer | Transformer NoPE | LSTM | Hybrid |
 | --- | --- | --- | --- | --- |
 | 1 | 1 | 1 | 1 | 1 |
@@ -42,16 +46,18 @@ Each model in the table had roughly 32K parameters.
 | 5 | 3 | 5 | 10 | 5 |
 | 6 | 4 | 9 | 15 | 5 |
 | 7 | 33 | 18 | 11 | 5 |
-| 8 | - | - | 12 | 6 |
+| 8 | - | 42 | 12 | 6 |
 | 9 | - | - | 18 | 7 |
 | 10 | - | - | 15 | 3 |
 | 11 | - | - | 18 | 4 |
-| 12 | - | - | - | 2 |
+| 12 | - | - | 21 | 2 |
 | 13 | - | - | - | 2 |
 | 14 | - | - | - | 2 |
 | 15 | - | - | - | 5 |
 | 16 | - | - | - | 1 |
-
+| 17 | - | - | - | 2 |
+| 18 | - | - | - | 3 |
+| 19 | - | - | - | 18+ |
 
 Roughly 130K parameters per model.
 
