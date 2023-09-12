@@ -91,6 +91,7 @@ class AdditionDataset:
         self.padding_token = base + 2  # Before input and after target
         self.eos_token = base + 3  # After target
         self.dot_token = base + 4  # Decimal separator
+        self.n_tokens = base + 5
 
     @property
     def max_input_length(self):

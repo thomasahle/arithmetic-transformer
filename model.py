@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
 
 from dataset import AdditionDataset
@@ -49,8 +48,7 @@ class AdditionModel(nn.Module):
         self.ds = ds  # Input the dataset for relevant parameters
         self.lr = lr
         self.hidden_size = hidden_size
-        num_tokens = ds.base + 4  # 4 extra tokens for end, separator, padding, and eos
-        self.embedding = nn.Embedding(num_tokens, hidden_size)
+        self.embedding = nn.Embedding(ds.n_tokens, hidden_size)
         self.kind = kind
         seq = self.ds.seq
         if kind == "lstm":
@@ -212,7 +210,6 @@ class AdditionModel(nn.Module):
     def print_examples(self, num_examples=3):
         with torch.no_grad():
             for example in self.ds.generate_batch(num_examples):
-                print("Raw:    ", example.tolist())
                 print("Example:", self.ds.repr_example(example))
                 # Cut answer off example, and generate an answer using the model instead:
                 n = example.tolist().index(self.ds.end_token) + 1
@@ -220,4 +217,5 @@ class AdditionModel(nn.Module):
                 raw_prediction = self.generate(example[:n]).cpu()
                 verdict = "Correct" if torch.all(true_answer == raw_prediction) else "Wrong"
                 print("Output: ", self.ds.repr_example(raw_prediction), f"({verdict})")
+                print("Raw In: ", example.tolist())
                 print("Raw Out:", raw_prediction.tolist())
