@@ -62,10 +62,7 @@ def main():
     args = parser.parse_args()
 
     dataset = AdditionDataset(
-        10**6,  # data points per epoch
-        base=10,
-        number_length=1,
-        op=args.op
+        10**6, base=10, number_length=1, op=args.op  # data points per epoch
     )
 
     model = AdditionModel(
@@ -85,48 +82,62 @@ def main():
     manual_training(model, dataset, args)
 
 
+def answer_mask(dataset, batch):
+    """Creates a mask of everything after the END (or =) token, which separates the question
+    from the answer."""
+    mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1) & (
+        batch != dataset.end_token
+    )
+    return mask[:, 1:]
+
+
+def training_step(model, batch):
+    """Computes cross entropy loss between the model output and the ground truth, but only on
+    the tokens after the END token, since the previous data is just random."""
+    mask = answer_mask(model.ds, batch)
+    truth = batch[:, 1:]
+    out = model(batch)[:, :-1]
+    return F.cross_entropy(out[mask], truth[mask])
+
+
+def validation_step(model, batch):
+    """Computes the accuracy on the model, if we assume greedy decoding is used.
+    We only consider a question corectly solved if every single token is correctly predicted,
+    including the padding."""
+    mask = answer_mask(model.ds, batch)
+    truth2 = batch[:, 1:] * mask
+    out = model(batch)[:, :-1]
+    preds = torch.argmax(out, dim=2) * mask
+    return torch.all(preds == truth2, dim=1).float().mean()
+
+
 def manual_training(model, dataset, args):
     if args.cpu:
         device = torch.device("cpu")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
     else:
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cpu")
     model = model.to(device)
 
-    # Get optimizer (and potentially the scheduler)
-    optimizers = model.configure_optimizers()
-    if isinstance(optimizers, tuple) and len(optimizers) == 2:
-        optimizer, scheduler = optimizers
-    else:
-        optimizer = optimizers
+    batch_size = args.batch_size
+    optimizer = model.configure_optimizers()
 
     # Standard PyTorch Training Loop
     time_to_success = Counter()
     for epoch in range(args.epochs):
         train_batches = 1000
         with torch.no_grad():
-            X = dataset.generate_batch(args.batch_size * train_batches).to(device)
-            Xmask = (torch.cumsum(X == dataset.end_token, dim=1) == 1) & (
-                X != dataset.end_token
-            )
-            Xmask = Xmask[:, 1:]
+            train_data = dataset.generate_batch(batch_size * train_batches).to(device)
 
         # Training Loop
         model.train()
         for batch_idx in tqdm.tqdm(range(train_batches)):
-            batch = X[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
-            mask = Xmask[
-                batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size
-            ]
-
+            batch = train_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
             optimizer.zero_grad()
-            truth = batch[:, 1:]
-            out = model(batch)[:, :-1]
-            loss = F.cross_entropy(out[mask], truth[mask])
+            loss = training_step(model, batch)
             loss.backward()
             optimizer.step()
 
@@ -137,24 +148,11 @@ def manual_training(model, dataset, args):
         model.eval()
         with torch.no_grad():
             val_batches = 100
-            X = dataset.generate_batch(args.batch_size * val_batches).to(device)
-            Xmask = (torch.cumsum(X == dataset.end_token, dim=1) == 1) & (
-                X != dataset.end_token
-            )
-            Xmask = Xmask[:, 1:]
+            val_data = dataset.generate_batch(batch_size * val_batches).to(device)
 
             for batch_idx in tqdm.tqdm(range(val_batches)):
-                batch = X[
-                    batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size
-                ]
-                mask = Xmask[
-                    batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size
-                ]
-
-                truth2 = batch[:, 1:] * mask
-                out = model(batch)[:, :-1]
-                preds = torch.argmax(out, dim=2) * mask
-                acc = torch.all(preds == truth2, dim=1).float().mean()
+                batch = val_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
+                acc = validation_step(model, batch)
                 accs.append(acc)
 
         time_to_success[dataset.number_length] += 1
