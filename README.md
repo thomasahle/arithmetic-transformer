@@ -13,22 +13,22 @@ E.g. the Hybrid model took just 7 epochs (7*10^6 examples) to learn 8 digit addi
 To learn 14 digit addition, the hybrid model took a total of 293 epochs ~ 3*10^8 examples.
 This is of course much less than the total of different 10^28 possible input pairs.
 
-|Digits| Transformer | Transformer NoPE | LSTM | Hybrid |
-| --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | 1 | 1 |
-| 2 | 1 | 3 | 2 | 2 |
-| 3 | 2 | 4 | 7 | 3 |
-| 4 | 21 | 8 | 11 | 5 |
-| 5 | 16 | 15 | 24 | 8 |
-| 6 | 81 | 33 | 59 | 9 |
-| 7 | 270+ | 82 | 52 | 8 |
-| 8 | - | 282 | - | 7 |
-| 9 | - | - | - | 11 |
-| 10 | - | - | - | 20 |
-| 11 | - | - | - | 33 |
-| 12 | - | - | - | 34 |
-| 13 | - | - | - | 48 |
-| 14 | - | - | - | 103 |
+|Digits| Transformer Learned | Transformer Sine | Transformer NoPE | LSTM | Hybrid |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 1 | 1 | 1 | 1 |
+| 2 | 1 | 2 | 3 | 2 | 2 |
+| 3 | 2 | 3 | 4 | 7 | 3 |
+| 4 | 21 | 6 | 8 | 11 | 5 |
+| 5 | 16 | 5 | 15 | 24 | 8 |
+| 6 | 81 | 9 | 33 | 59 | 9 |
+| 7 | 270+ | - | 82 | 52 | 8 |
+| 8 | - | - | 282 | - | 7 |
+| 9 | - | - | - | - | 11 |
+| 10 | - | - | - | - | 20 |
+| 11 | - | - | - | - | 33 |
+| 12 | - | - | - | - | 34 |
+| 13 | - | - | - | - | 48 |
+| 14 | - | - | - | - | 103 |
 
 Each model in the table had roughly 32K parameters.
 
@@ -37,27 +37,27 @@ Each model in the table had roughly 32K parameters.
 Increasing the model sizes just slightly allowed the model to learn multi-digit addition much faster.
 The hybrid model got up to 18 digits with just a few epochs per digit, before something finally broke during the 19 digit training and accuracy fell to near 0.
 
-|Digits| Transformer | Transformer NoPE | LSTM | Hybrid |
-| --- | --- | --- | --- | --- |
-| 1 | 1 | 1 | 1 | 1 |
-| 2 | 1 | 2 | 2 | 1 |
-| 3 | 2 | 2 | 3 | 2 |
-| 4 | 3 | 2 | 5 | 2 |
-| 5 | 3 | 5 | 10 | 5 |
-| 6 | 4 | 9 | 15 | 5 |
-| 7 | 33 | 18 | 11 | 5 |
-| 8 | 45 | 42 | 12 | 6 |
-| 9 | - | - | 18 | 7 |
-| 10 | - | - | 15 | 3 |
-| 11 | - | - | 18 | 4 |
-| 12 | - | - | 21 | 2 |
-| 13 | - | - | 30 | 2 |
-| 14 | - | - | - | 2 |
-| 15 | - | - | - | 5 |
-| 16 | - | - | - | 1 |
-| 17 | - | - | - | 2 |
-| 18 | - | - | - | 3 |
-| 19 | - | - | - | 18+ |
+|Digits| T. Learned | T. Sine | T. NoPE | LSTM | Hybrid |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 1 | 1 | 1 | 1 |
+| 2 | 1 | 1 | 2 | 2 | 1 |
+| 3 | 2 | 1 | 2 | 3 | 2 |
+| 4 | 3 | 1 | 2 | 5 | 2 |
+| 5 | 3 | 1 | 5 | 10 | 5 |
+| 6 | 4 | 2 | 9 | 15 | 5 |
+| 7 | 33 | 2 | 18 | 11 | 5 |
+| 8 | 45 | 5 | 42 | 12 | 6 |
+| 9 | - | - | - | 18 | 7 |
+| 10 | - | - | - | 15 | 3 |
+| 11 | - | - | - | 18 | 4 |
+| 12 | - | - | - | 21 | 2 |
+| 13 | - | - | - | 30 | 2 |
+| 14 | - | - | - | - | 2 |
+| 15 | - | - | - | - | 5 |
+| 16 | - | - | - | - | 1 |
+| 17 | - | - | - | - | 2 |
+| 18 | - | - | - | - | 3 |
+| 19 | - | - | - | - | 18+ |
 
 Roughly 130K parameters per model.
 
