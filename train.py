@@ -52,7 +52,7 @@ def main():
         help="Operation to learn (add, mult)",
     )
     parser.add_argument("--norm-last", action="store_true")
-    parser.add_argument("--cpu", action="store_true")
+    parser.add_argument("--device", type=str, default=None)
     parser.add_argument(
         "--num-heads",
         type=int,
@@ -112,8 +112,8 @@ def validation_step(model, batch):
 
 
 def manual_training(model, dataset, args):
-    if args.cpu:
-        device = torch.device("cpu")
+    if args.device is not None:
+        device = torch.device(args.device)
     elif torch.cuda.is_available():
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():
