@@ -1,6 +1,6 @@
 # Learning Arithmetic with Sequence Models
 This repository contains code for training neural networks to learn the process of addition.
-We experiment with different causal neural network architectures like LSTM, Transformer, and a hybrid model which is *half LSTM, half Transformer*.
+We experiment with different causal neural network architectures like LSTM, Transformer, and various positional encodings. The best one being a transformer *using a one layer LSTM as layer 1*.
 The primary focus of this project is to compare how quickly different models learn to add numbers with varying digit lengths.
 
 ## Results
@@ -10,8 +10,9 @@ Here is a summary of the number of epochs different models took to learn additio
 The table shows the number of epochs needed to learn addition of `n` digits.
 E.g. the Hybrid model took just 7 epochs (7*10^6 examples) to learn 8 digit addition to 90% accuracy, after it had already learned 7 digit addition to 90% accuracy.
 
-To learn 14 digit addition, the hybrid model took a total of 293 epochs ~ 3*10^8 examples.
+To learn 14 digit addition, the hybrid model took a total of 135 epochs ~ 10^8 examples.
 This is of course much less than the total of different 10^28 possible input pairs.
+The larger models (below) are able to learn even faster.
 
 |Digits| Transformer Learned | Transformer Sine | Transformer NoPE | Transformer LSTM | LSTM | Hybrid |
 | --- | --- | --- | --- | --- | --- | --- |
