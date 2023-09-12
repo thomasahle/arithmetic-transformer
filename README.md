@@ -51,16 +51,17 @@ The hybrid model got up to 18 digits with just a few epochs per digit, before so
 | 8 | 10 | 3 | 2 | 1 | 12 | 1 |
 | 9 | 6 | 1 | 3 | 1 | 18 | 2 |
 | 10 | 10 | 1 | 4 | 1 | 15 | 1 |
-| 11 | - | 2 | 1 | 1 | 18 | 1 |
-| 12 | - | 2 | 4 | 1 | 21 | 2 |
-| 13 | - | 2 | 9 | 1 | 30 | 2 |
-| 14 | - | 2 | 13 | 2 | - | 1 |
-| 15 | - | 2 | 20 | 1 | - | 1 |
-| 16 | - | 2 | - | 1 | - | 6 |
+| 11 | 32 | 2 | 1 | 1 | 18 | 1 |
+| 12 | 27 | 2 | 4 | 1 | 21 | 2 |
+| 13 | 137 | 2 | 9 | 1 | 30 | 2 |
+| 14 | 105 | 2 | 13 | 2 | - | 1 |
+| 15 | 123 | 2 | 20 | 1 | - | 1 |
+| 16 | 162+ | 2 | - | 1 | - | 6 |
 | 17 | - | 3 | - | 1 | - | 3 |
 | 18 | - | 2 | - | 1 | - | 5 |
 
 
+ 
 Roughly 130K parameters per model.
 
 ## Installation
@@ -128,3 +129,19 @@ Doing least significant digit first makes the problem easier, but less realistic
 Since the input size can in principle grow without limit, I had to decide how to do positional encoding in the transformers.
 I tried not using positional encoding at all (NoPE), and using an nn.Embedding where I simply added new vectors as needed.
 Not having embeddings was a bit better than the additive positional embeddings, but the best results came from using an LSTM for the first two layers, and then switch to a transformer for the top 2. I called this the "hybrid" method.
+
+## More Results
+
+I also trained some 800K parameter models to learn multiplication.
+Each one is 6 layers, 4 hears, 128 hidden size and 1% dropout.
+
+| Digits | T. Learned | T. Sine | T. NoPE | T. LSTM | LSTM  | Hybrid |
+|:------:|:----------:|:-------:|:-------:|:-------:|:-----:|:------:|
+|   1    |     1      |    1    |    1    |    1    |   1   |   1    |
+|   2    |     2      |    2    |    2    |    1    |   5   |   1    |
+|   3    |    15      |   16    |   18    |   14    |  41   |  34    |
+|   4    |   181      |  233    |   67    |  133    | 953+  | 803+   |
+|   5    |   507+     |  426+   |  411    |  349+   |   -   |   -    |
+|   6    |     -      |    -    |  122+   |    -    |   -   |   -    |
+
+Surprisingly the position encoding less transformer does best here, though it's possible the Transformer with LSTM on the first layer would have done as well, if I had let it run as long.
