@@ -179,11 +179,10 @@ class AdditionModel(nn.Module):
         print(
             f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
         )
-        # Create AdamW optimizer and use the fused version if it is available
+        # Create AdamW optimizer and use the fused version if our data is on cuda
         optimizer = torch.optim.AdamW(
-            optim_groups, lr=self.lr, fused=torch.cuda.is_available()
+            optim_groups, lr=self.lr, fused=self.embedding.weight.is_cuda
         )
-        # optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
     def generate(self, input_sequence):
