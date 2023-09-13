@@ -58,6 +58,7 @@ class AdditionModel(nn.Module):
                 num_layers=num_layers,
                 dropout=dropout,
                 batch_first=True,
+                bidirectional=False,
             )
         elif kind == "rnn":
             self.model = nn.RNN(
@@ -162,6 +163,7 @@ class AdditionModel(nn.Module):
             attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model2(x, attn_mask, is_causal=True)
         return self.fc(self.norm(x))
+        return x
 
     def configure_optimizers(self):
         param_dict = {pn: p for pn, p in self.named_parameters() if p.requires_grad}
@@ -188,9 +190,15 @@ class AdditionModel(nn.Module):
     @torch.no_grad()
     def generate(self, input_sequence):
         # Generate output sequence from input sequence using trained model
-        # TODO: We use greedy digit-by-digit generation. It's possible the models
-        # would perform a bit better if we instead used beam search to pick the most
-        # likely overall result.
+        # Future featuers:
+        #  - Beam search: We use greedy digit-by-digit generation. It's possible the models
+        #    would perform a bit better if we instead used beam search to pick the most
+        #    likely overall result.
+        #  - Support generating on multiple sequences at the same time. Would presumably
+        #    require some padding or keeping track of the length of each existing sequence.
+        #  - KV caching: Instead of evaluating the model on the whole sequence for every
+        #    token generated, we can save cache the KVs of the previous tokens and only
+        #    compute one column of the model at a time.
         assert input_sequence[-1] == self.ds.end_token, "Input should end with ="
         # Pad to expected length
         n = len(input_sequence)
