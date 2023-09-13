@@ -51,6 +51,12 @@ def main():
         default="add",
         help="Operation to learn (add, mult)",
     )
+    parser.add_argument(
+        "--cot-padding",
+        type=int,
+        default=0,
+        help="Chain of thought padding",
+    )
     parser.add_argument("--norm-last", action="store_true")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument(
@@ -62,7 +68,10 @@ def main():
     args = parser.parse_args()
 
     dataset = AdditionDataset(
-        base=10, number_length=1, op=args.op  # data points per epoch
+        base=10,
+        number_length=1,
+        op=args.op,
+        pre_end_padding=args.cot_padding,
     )
 
     model = AdditionModel(
