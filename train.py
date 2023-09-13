@@ -62,7 +62,7 @@ def main():
     args = parser.parse_args()
 
     dataset = AdditionDataset(
-        10**6, base=10, number_length=1, op=args.op  # data points per epoch
+        base=10, number_length=1, op=args.op  # data points per epoch
     )
 
     model = AdditionModel(
@@ -121,6 +121,10 @@ def validation_step(model, batch):
         if torch.all((preds * mask)[i] == (truth2 * mask)[i]):
             assert torch.all(pred0 == true)
             # If we are getting the answer right, they should be the same.
+            # print(batch[0])
+            # print(preds[0])
+            # print(pred0)
+            # print(pred1)
             assert torch.all(pred0 == pred1)
         else:
             # If we are getting the answer wrong, they should both be wrong.

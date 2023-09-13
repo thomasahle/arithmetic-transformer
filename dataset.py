@@ -60,6 +60,8 @@ def move_padding_to_end(tensor, padding_token):
     non_padding_mask = tensor != padding_token
 
     # Create a tensor with large values where there's padding and row-wise indices elsewhere
+    # This allows us to "sort" the padding to the end, while keeping everything else in its
+    # original order.
     sorting_tensor = non_padding_mask * torch.arange(
         tensor.size(1), device=tensor.device
     ).expand_as(tensor) + (~non_padding_mask) * tensor.size(1)
@@ -79,14 +81,21 @@ def leading_zeros_to_padding_(digits, padding_token):
     digits[mask] = padding_token
 
 
+# Adding extra padding is an easy way to improve performance, as it gives the
+# model more space to think. For example, without padding, the standard model
+# kind=transformer-lstm gets accuracies (1, 0.95, 0.66), but we just five extra
+# paddings on the left, it gets (1, 0.98, 0.80). Even better, if we add the
+# padding right before the equality sign, ...
+
+
 class AdditionDataset:
     def __init__(
-        self, num_samples, base, number_length, op):
-        self.num_samples = num_samples
+        self, base, number_length, op, pre_end_padding=0):
         self.base = base
         self.number_length = number_length
         self.sequence_length = 2
         self.op = op
+        self.pre_end_padding = pre_end_padding
 
         self.end_token = base  # After input
         self.separator_token = base + 1  # between inputs
@@ -117,10 +126,7 @@ class AdditionDataset:
     @property
     def seq(self):
         # Upper bound on total length including inputs, outputs, separator and EOS
-        return self.max_input_length + self.max_output_length + 1
-
-    def __len__(self):
-        return self.num_samples
+        return self.pre_end_padding + self.max_input_length + self.max_output_length + 1
 
     def generate_batch(self, bs):
         base = self.base
@@ -160,6 +166,9 @@ class AdditionDataset:
                 in_digits0,
                 torch.full((bs, 1), self.separator_token),
                 in_digits1,
+                # To prevent the padding from being moved to the end, we use a
+                # free value here, then later change it to padding.
+                torch.full((bs, self.pre_end_padding), self.n_tokens),
                 torch.full((bs, 1), self.end_token),
                 out_digits,
                 torch.full((bs, 1), self.eos_token),
@@ -167,6 +176,7 @@ class AdditionDataset:
             dim=1,
         )
         res = move_padding_to_end(res, self.padding_token)
+        res[res == self.n_tokens] = self.padding_token
         assert res.shape[1] == self.seq, (res.shape, self.seq)
         return res
 
