@@ -163,7 +163,6 @@ class AdditionModel(nn.Module):
             attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model2(x, attn_mask, is_causal=True)
         return self.fc(self.norm(x))
-        return x
 
     def configure_optimizers(self):
         param_dict = {pn: p for pn, p in self.named_parameters() if p.requires_grad}

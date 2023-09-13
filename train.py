@@ -58,6 +58,7 @@ def main():
         help="Chain of thought padding",
     )
     parser.add_argument("--norm-last", action="store_true")
+    parser.add_argument("--compile", action="store_true")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument(
         "--num-heads",
@@ -87,7 +88,8 @@ def main():
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"The model has {num_params} parameters")
 
-    # model = torch.compile(model)
+    if args.compile:
+        model = torch.compile(model)
     manual_training(model, dataset, args)
 
 
