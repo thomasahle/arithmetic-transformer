@@ -18,6 +18,7 @@ def digits_to_int(digits, base):
         n = n * base + digit
     return n
 
+
 # Writes [10, 2] ->
 # tensor([[0, 1, 0],
 #         [0, 0, 2]])
@@ -46,25 +47,24 @@ def digits_to_numbers(digits, base):
 
 def make_digits_random_length(bs, base, max_number_length):
     digits = torch.randint(base, (bs, max_number_length))
-    # n_digits = torch.randint(max_number_length, (bs,))
-    n_digits = Geometric(.5).sample((bs,)).clip(max=max_number_length-1)
+    n_digits = torch.randint(max_number_length, (bs,))
+    # n_digits = Geometric(0.5).sample((bs,)).clip(max=max_number_length - 1)
     mask = torch.arange(max_number_length)[None].repeat(bs, 1) < n_digits[:, None]
     digits[mask] = 0
     return digits
 
 
-def move_padding_to_end(tensor, padding_token):
+def move_padding_to_end(tensor, padding_token, end=True):
     """Move all padding tokens in each row to the end without reordering the rest."""
-
-    # Create a mask for non-padding values
-    non_padding_mask = tensor != padding_token
 
     # Create a tensor with large values where there's padding and row-wise indices elsewhere
     # This allows us to "sort" the padding to the end, while keeping everything else in its
     # original order.
-    sorting_tensor = non_padding_mask * torch.arange(
-        tensor.size(1), device=tensor.device
-    ).expand_as(tensor) + (~non_padding_mask) * tensor.size(1)
+    sorting_tensor = torch.where(
+        tensor == padding_token,
+        tensor.size(1) if end else -tensor.size(1),
+        torch.arange(tensor.size(1), device=tensor.device),
+    )
 
     # Get the indices that would sort the tensor
     _, sorted_indices = sorting_tensor.sort(dim=1)
@@ -89,8 +89,7 @@ def leading_zeros_to_padding_(digits, padding_token):
 
 
 class AdditionDataset:
-    def __init__(
-        self, base, number_length, op, pre_end_padding=0):
+    def __init__(self, base, number_length, op, pre_end_padding=0):
         self.base = base
         self.number_length = number_length
         self.sequence_length = 2
@@ -111,15 +110,15 @@ class AdditionDataset:
     @property
     def max_output_length(self):
         # Upper bound on total output number length, not including EOS
-        if self.op == 'add':
-            max_number = self.sequence_length * self.base ** self.number_length
-        elif self.op == 'mult':
+        if self.op == "add":
+            max_number = self.sequence_length * self.base**self.number_length
+        elif self.op == "mult":
             max_number = self.base ** (self.number_length * self.sequence_length)
-        elif self.op == 'div100':
-            max_number = self.base ** self.number_length * 100
-        elif self.op == 'sqdiv':
-            max_number = (self.base ** self.number_length - 1) ** 2
-        elif self.op == 'divmod':
+        elif self.op == "div100":
+            max_number = self.base**self.number_length * 100
+        elif self.op == "sqdiv":
+            max_number = (self.base**self.number_length - 1) ** 2
+        elif self.op == "divmod":
             return 2 * self.number_length + 1
         return len(int_to_digits(max_number, self.base))
 
@@ -136,24 +135,30 @@ class AdditionDataset:
         # Add them together
         numbers0 = digits_to_numbers(in_digits0, base)
         numbers1 = digits_to_numbers(in_digits1, base)
-        if self.op == 'divmod':
+        if self.op == "divmod":
             numbers1 = torch.clip(numbers1, min=1)
-            res0 = numbers_to_digits(numbers0 // numbers1, base, max_length=self.number_length)
-            res1 = numbers_to_digits(numbers0 % numbers1, base, max_length=self.number_length)
+            res0 = numbers_to_digits(
+                numbers0 // numbers1, base, max_length=self.number_length
+            )
+            res1 = numbers_to_digits(
+                numbers0 % numbers1, base, max_length=self.number_length
+            )
             leading_zeros_to_padding_(res0, self.padding_token)
             leading_zeros_to_padding_(res1, self.padding_token)
-            out_digits = torch.cat([res0, torch.full((bs, 1), self.dot_token), res1], dim=1)
+            out_digits = torch.cat(
+                [res0, torch.full((bs, 1), self.dot_token), res1], dim=1
+            )
         else:
-            if self.op == 'add':
+            if self.op == "add":
                 res = numbers0 + numbers1
-            elif self.op == 'mult':
+            elif self.op == "mult":
                 res = numbers0 * numbers1
-            elif self.op == 'div100':
+            elif self.op == "div100":
                 numbers1 = torch.clip(numbers1, min=1)
                 res = numbers0 * 100 // numbers1
-            elif self.op == 'sqdiv':
+            elif self.op == "sqdiv":
                 numbers1 = torch.clip(numbers1, min=1)
-                res = numbers0 ** 2 // numbers1
+                res = numbers0**2 // numbers1
             out_digits = numbers_to_digits(res, base, max_length=self.max_output_length)
             leading_zeros_to_padding_(out_digits, self.padding_token)
 
@@ -186,12 +191,11 @@ class AdditionDataset:
         dic[self.end_token] = " = "
         dic[self.eos_token] = ""
         dic[self.separator_token] = {
-                "mult": " * ",
-                "add": " + ",
-                "div100": " / ",
-                "divmod": " / ",
-                "sqdiv": "^2 / ",
-            }[self.op]
+            "mult": " * ",
+            "add": " + ",
+            "div100": " / ",
+            "divmod": " / ",
+            "sqdiv": "^2 / ",
+        }[self.op]
         dic[self.dot_token] = "."
         return "".join(dic[token.item()] for token in example)
-

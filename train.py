@@ -63,7 +63,7 @@ def main():
     parser.add_argument(
         "--num-heads",
         type=int,
-        default=1,
+        default=4,
         help="The number of heads/rank in transformer/mlp",
     )
     args = parser.parse_args()
@@ -115,62 +115,28 @@ def validation_step(model, batch):
     We only consider a question corectly solved if every single token is correctly predicted,
     including the padding."""
     mask = answer_mask(model.ds, batch)
-    truth2 = batch[:, 1:]
+    truth = batch[:, 1:]
     out = model(batch)[:, :-1]
     preds = torch.argmax(out, dim=2)
 
-    #if not torch.allclose(model(batch)[:1], model(batch[:1])):
-    #    print(batch[0])
-    #    print(outa := model(batch)[0, 0])
-    #    print(outb := model(batch[:1])[0, 0])
-    #    print(torch.linalg.norm(outa - outb))
-
-    # assert torch.allclose(model(batch)[:1], model(batch[:1]))
-
-    # If we are getting the answer wrong, preds may have a different
-    # value from what we'd get with generate.
-    # But if we are getting the answer right, they should be the same.
-    # And if we are getting the answer wrong, they should both be wrong.
-
-    # x = torch.randint(model.ds.n_tokens, (1,) + batch.shape[1:], device=batch.device)
-    # y = x.clone()
-    # y[0, 1] = 0
-    # print("Here:")
-    # print(outx := model(x)[0, :2])
-    # print(outy := model(y)[0, :2])
-    # print()
-    # assert torch.allclose(outx[0], outy[0])
-    # assert not torch.allclose(outx[1], outy[1])
-
-    for i in range(1):
+    # We'd to test that our validation method matches what you get with generate.
+    # Unfortunately the LSTMs give slightly different results when passing a batch,
+    # vs when passing one element at a time, which breaks the direct correspondance.
+    for i in range(0):
         n = batch[i].tolist().index(model.ds.end_token) + 1
         true = batch[i, n:]
         pred0 = preds[i, n-1:]
         pred1 = model.generate(batch[i][:n])
-        if torch.all((preds * mask)[i] == (truth2 * mask)[i]):
+        if torch.all((preds * mask)[i] == (truth * mask)[i]):
             assert torch.all(pred0 == true)
             # If we are getting the answer right, they should be the same.
-            if not torch.all(pred0 == pred1):
-                print(batch[0])
-                print('o1', out[0, n-1])
-                print('o1.5', model(batch[:1])[0, n-1])
-                o = out[0, n-1]
-                b0 = batch[:1]
-                b0[0, n:] = model.ds.padding_token
-                print(batch[0])
-                print('o2', model(b0[:1])[0, n-1])
-
-                print(preds[0])
-                print(pred0)
-                print(batch[i][:n])
-                print(pred1)
             assert torch.all(pred0 == pred1)
         else:
             # If we are getting the answer wrong, they should both be wrong.
             assert not torch.all(pred0 == true)
             assert not torch.all(pred1 == true)
 
-    return torch.all(preds * mask == truth2 * mask, dim=1).float().mean()
+    return torch.all(preds * mask == truth * mask, dim=1).float().mean()
 
 
 def manual_training(model, dataset, args):
