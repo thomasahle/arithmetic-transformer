@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 
 from dataset import AdditionDataset
+import methods
 
 
 def sinusoidal_position_embeddings(seq_length, d_model):
@@ -93,6 +94,14 @@ class AdditionModel(nn.Module):
                     batch_first=True,
                 ),
                 num_layers - 1,
+            )
+        elif kind == "transformer-rope":
+            self.model = methods.RotaryEmbeddingTransformerEncoder(
+                d_model=hidden_size,
+                dim_feedforward=hidden_size * 2,
+                nhead=num_heads,
+                dropout=dropout,
+                num_layers=num_layers,
             )
         elif kind.startswith("transformer"):
             if kind == "transformer":
