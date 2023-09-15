@@ -95,21 +95,20 @@ class AdditionModel(nn.Module):
                 num_layers - 1,
             )
         elif kind == "attention-rope":
-            self.model = methods.RotaryEmbeddingTransformerEncoder(
-                d_model=hidden_size,
-                dim_feedforward=0,
-                nhead=num_heads,
-                dropout=dropout,
-                num_layers=num_layers,
-            )
+            self.model = nn.Sequential(*[
+                    methods.RotaryEmbeddingTransformerLayer(hidden_size, num_heads, 0, dropout)
+                for _ in range(num_layers)
+            ])
         elif kind == "transformer-rope":
-            self.model = methods.RotaryEmbeddingTransformerEncoder(
-                d_model=hidden_size,
-                dim_feedforward=hidden_size * 2,
-                nhead=num_heads,
-                dropout=dropout,
-                num_layers=num_layers,
-            )
+            self.model = nn.Sequential(*[
+                    methods.RotaryEmbeddingTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout)
+                for _ in range(num_layers)
+            ])
+        elif kind == "transformer-alibi":
+            self.model = nn.Sequential(*[
+                    methods.AlibiTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout)
+                for _ in range(num_layers)
+            ])
         elif kind.startswith("transformer"):
             if kind == "transformer":
                 self.pos_emb = nn.Embedding(seq, hidden_size)
@@ -172,8 +171,12 @@ class AdditionModel(nn.Module):
                 x = x + emb
             elif self.kind == "transformer-lstm":
                 x, _ = self.base(x)
-            attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
-            x = self.model(x, mask=attn_mask, is_causal=True)
+            # My own transformers don't need a causal mask
+            if self.kind in ("transformer-rope", "transformer-alibi"):
+                x = self.model(x)
+            else:
+                attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
+                x = self.model(x, mask=attn_mask, is_causal=True)
         elif self.kind == "hybrid":
             x, _ = self.model1(x)
             attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)

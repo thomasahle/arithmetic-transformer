@@ -2,29 +2,19 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
-def apply_rope(src, cos, sin):
-    # Apply simply rotation matrix to every pair of values.
-    # Even/odd is better than splitting "first/last" half, as neighbouring
-    # values will go into the same attention head.
-    x = src[..., 0::2]
-    y = src[..., 1::2]
-    out = torch.empty_like(src)
-    out[..., 0::2] = x * cos - y * sin
-    out[..., 1::2] = x * sin + y * cos
-    return out
-
-@torch.no_grad()
-def make_cos_sin_like(x):
-    length, dim = x.shape[-2:]
-    inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2) / dim))
-    pos = torch.arange(0, length)
-    # Outer product of m * theta^(1000/k)
-    outer = torch.outer(pos, inv_freq).to(x.device)
-    return outer.cos(), outer.sin()
+def make_ffw(d_model, dim_feedforward, dropout):
+    return nn.Sequential(
+        nn.LayerNorm(d_model),
+        nn.Linear(d_model, dim_feedforward),
+        nn.ReLU(inplace=True),
+        nn.Dropout(dropout),
+        nn.Linear(dim_feedforward, d_model),
+        nn.Dropout(dropout),
+    )
 
 class RotaryEmbeddingTransformerLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout):
-        super(RotaryEmbeddingTransformerLayer, self).__init__()
+        super().__init__()
         assert d_model % num_heads == 0
 
         self.norm = nn.LayerNorm(d_model)
@@ -33,18 +23,42 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         self.num_heads = num_heads
         self.out_proj = nn.Linear(d_model, d_model)
 
+        # Cached rope mask
         self.cos_sin = None
 
         # Two-layer MLP unless dim_feedforward is 0, in which case we make an "attention only"
         # transformer.
-        self.ffw = nn.Sequential(
-            nn.LayerNorm(d_model),
-            nn.Linear(d_model, dim_feedforward),
-            nn.Dropout(dropout),
-            nn.ReLU(inplace=True),
-            nn.Linear(dim_feedforward, d_model),
-            nn.Dropout(dropout),
-        ) if dim_feedforward != 0 else None
+        if dim_feedforward != 0:
+            self.ffw = make_ffw(d_model, dim_feedforward, dropout)
+        else:
+            self.ffw = None
+
+
+    def apply_rope(self, src):
+        self.ensure_cos_sin_like(src)
+        cos, sin = self.cos_sin
+        # Apply simply rotation matrix to every pair of values.
+        # Even/odd is better than splitting "first/last" half, as neighbouring
+        # values will go into the same attention head.
+        x = src[..., 0::2]
+        y = src[..., 1::2]
+        out = torch.empty_like(src)
+        out[..., 0::2] = x * cos - y * sin
+        out[..., 1::2] = x * sin + y * cos
+        return out
+
+    @torch.no_grad()
+    def ensure_cos_sin_like(self, x):
+        seq, dim = x.shape[-2: ]
+        # Test if we already have a cos_sin of the right size
+        if self.cos_sin is not None and self.cos_sin[0].shape == (seq, dim):
+            return
+        # Outer product of m * theta^(1000/k)
+        outer = torch.outer(
+                torch.arange(0, seq),
+                1. / (10000 ** (torch.arange(0, dim, 2) / dim))
+            ).to(x.device)
+        self.cos_sin = (outer.cos(), outer.sin())
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -55,10 +69,8 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
 
         # Apply rotary embeddings to Q and K
-        if self.cos_sin is None or self.cos_sin[0].shape[0] != seq:
-            self.cos_sin = make_cos_sin_like(Q)
-        Q = apply_rope(Q, *self.cos_sin)
-        K = apply_rope(K, *self.cos_sin)
+        Q = self.apply_rope(Q)
+        K = self.apply_rope(K)
 
         # Self attention with causal mask
         attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, is_causal=True)
@@ -72,16 +84,46 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
 
         return src
 
+class AlibiTransformerLayer(nn.Module):
+    def __init__(self, d_model, num_heads, dim_feedforward, dropout):
+        super().__init__()
+        assert d_model % num_heads == 0
 
-class RotaryEmbeddingTransformerEncoder(nn.Module):
-    def __init__(self, d_model, nhead, num_layers, dim_feedforward, dropout):
-        super(RotaryEmbeddingTransformerEncoder, self).__init__()
-        self.layers = nn.Sequential(*[
-            RotaryEmbeddingTransformerLayer(d_model, nhead, dim_feedforward, dropout)
-            for _ in range(num_layers)])
+        self.norm = nn.LayerNorm(d_model)
+        self.WQKV = nn.Linear(d_model, 3 * d_model)
+        self.dropout_p = dropout
+        self.num_heads = num_heads
+        self.out_proj = nn.Linear(d_model, d_model)
 
-    def forward(self, src, mask=None, is_causal=True):
-        assert is_causal
-        # No need to be residual here, since the layers themselves are residual.
-        return self.layers(src)
+        # Cached rope mask
+        self.cos_sin = None
+
+        # Two-layer MLP unless dim_feedforward is 0, in which case we make an "attention only"
+        # transformer.
+        if dim_feedforward != 0:
+            self.ffw = make_ffw(d_model, dim_feedforward, dropout)
+        else:
+            self.ffw = None
+
+    def forward(self, src):
+        bs, seq, dim = src.shape
+
+        # Norm first
+        QKV = self.WQKV(self.norm(src))
+        # Each of Q, K, V are now shaped (bs, head, seq, dim)
+        Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
+
+        mask = torch.arange(seq)[None] + torch.arange(seq)[:, None]
+        mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
+        triu = torch.ones(seq, seq, dtype=torch.bool, device=src.device).triu(diagonal=1)
+        mask = mask.float().to(src.device)
+        mask = mask.masked_fill(triu, float('-inf'))
+        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=mask)
+
+        # Recombine heads
+        src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
+        # Norm first for feed-forward network
+        if self.ffw is not None:
+            src = src + self.ffw(src)
+        return src
 
