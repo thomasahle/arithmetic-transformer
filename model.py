@@ -42,7 +42,6 @@ class AdditionModel(nn.Module):
         num_layers,
         num_heads,
         lr,
-        norm_first,
         dropout,
     ):
         super().__init__()
@@ -89,11 +88,19 @@ class AdditionModel(nn.Module):
                     d_model=hidden_size,
                     dim_feedforward=hidden_size * 2,
                     nhead=num_heads,
-                    norm_first=norm_first,
+                    norm_first=True,
                     dropout=dropout,
                     batch_first=True,
                 ),
                 num_layers - 1,
+            )
+        elif kind == "attention-rope":
+            self.model = methods.RotaryEmbeddingTransformerEncoder(
+                d_model=hidden_size,
+                dim_feedforward=0,
+                nhead=num_heads,
+                dropout=dropout,
+                num_layers=num_layers,
             )
         elif kind == "transformer-rope":
             self.model = methods.RotaryEmbeddingTransformerEncoder(
@@ -111,7 +118,7 @@ class AdditionModel(nn.Module):
                     d_model=hidden_size,
                     dim_feedforward=hidden_size * 2,
                     nhead=num_heads,
-                    norm_first=norm_first,
+                    norm_first=True,
                     dropout=dropout,
                     batch_first=True,
                 ),
@@ -130,7 +137,7 @@ class AdditionModel(nn.Module):
                     d_model=hidden_size,
                     dim_feedforward=hidden_size * 2,
                     nhead=num_heads,
-                    norm_first=norm_first,
+                    norm_first=True,
                     dropout=dropout,
                     batch_first=True,
                 ),
@@ -171,6 +178,8 @@ class AdditionModel(nn.Module):
             x, _ = self.model1(x)
             attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
             x = self.model2(x, attn_mask, is_causal=True)
+        else:
+            x = self.model(x)
         return self.fc(self.norm(x))
 
     def configure_optimizers(self):

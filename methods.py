@@ -35,15 +35,16 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
 
         self.cos_sin = None
 
-        # Two-layer MLP
-        # self.ffw = nn.Sequential(
-        #     nn.LayerNorm(d_model),
-        #     nn.Linear(d_model, dim_feedforward),
-        #     nn.Dropout(dropout),
-        #     nn.ReLU(inplace=True),
-        #     nn.Linear(dim_feedforward, d_model),
-        #     nn.Dropout(dropout),
-        # )
+        # Two-layer MLP unless dim_feedforward is 0, in which case we make an "attention only"
+        # transformer.
+        self.ffw = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, dim_feedforward),
+            nn.Dropout(dropout),
+            nn.ReLU(inplace=True),
+            nn.Linear(dim_feedforward, d_model),
+            nn.Dropout(dropout),
+        ) if dim_feedforward != 0 else None
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -66,7 +67,8 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         src = src + self.out_proj(attn_output)
 
         # Norm first for feed-forward network
-        # src = src + self.ffw(src)
+        if self.ffw is not None:
+            src = src + self.ffw(src)
 
         return src
 
@@ -78,7 +80,8 @@ class RotaryEmbeddingTransformerEncoder(nn.Module):
             RotaryEmbeddingTransformerLayer(d_model, nhead, dim_feedforward, dropout)
             for _ in range(num_layers)])
 
-    def forward(self, src, mask, is_causal):
+    def forward(self, src, mask=None, is_causal=True):
+        assert is_causal
         # No need to be residual here, since the layers themselves are residual.
         return self.layers(src)
 

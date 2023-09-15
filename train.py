@@ -57,7 +57,6 @@ def main():
         default=0,
         help="Chain of thought padding",
     )
-    parser.add_argument("--norm-last", action="store_true")
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument(
@@ -81,7 +80,6 @@ def main():
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
-        norm_first=not args.norm_last,
         lr=args.lr,
         dropout=args.dropout,
     )
