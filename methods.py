@@ -85,7 +85,7 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         return src
 
 class AlibiTransformerLayer(nn.Module):
-    def __init__(self, d_model, num_heads, dim_feedforward, dropout):
+    def __init__(self, d_model, num_heads, dim_feedforward, dropout, level):
         super().__init__()
         assert d_model % num_heads == 0
 
@@ -94,6 +94,8 @@ class AlibiTransformerLayer(nn.Module):
         self.dropout_p = dropout
         self.num_heads = num_heads
         self.out_proj = nn.Linear(d_model, d_model)
+
+        self.level = level
 
         # Cached rope mask
         self.mask = None
@@ -110,7 +112,12 @@ class AlibiTransformerLayer(nn.Module):
         if self.mask is not None and self.mask.shape[-1] == seq:
             return
         mask = torch.arange(seq)[None] + torch.arange(seq)[:, None]
-        mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
+        #mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
+
+        mask = mask[None] * (- 2. ** -torch.arange(self.num_heads))[:, None, None]
+        # Seems higher levels should be less local, but it doesn't seem to work for me.
+        # mask /= float(self.level + 1)
+
         triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
         mask = mask.float().to(x.device)
         self.mask = mask.masked_fill(triu, float('-inf'))

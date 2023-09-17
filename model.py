@@ -98,7 +98,7 @@ class AdditionModel(nn.Module):
         elif kind == "attention-rnn":
             self.model = nn.Sequential(*[
                     methods.RNNTransformerLayer(hidden_size, num_heads, 0, dropout)
-                for _ in range(num_layers)
+                for i in range(num_layers)
             ])
         elif kind == "attention-rope":
             self.model = nn.Sequential(*[
@@ -112,8 +112,8 @@ class AdditionModel(nn.Module):
             ])
         elif kind == "transformer-alibi":
             self.model = nn.Sequential(*[
-                    methods.AlibiTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout)
-                for _ in range(num_layers)
+                    methods.AlibiTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout, i)
+                for i in range(num_layers)
             ])
         elif kind.startswith("transformer"):
             if kind == "transformer":

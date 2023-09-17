@@ -1,5 +1,6 @@
 import torch
 from torch.distributions.geometric import Geometric
+import itertools
 
 
 def int_to_digits(n, base):
@@ -114,7 +115,7 @@ class AdditionDataset:
         if self.op == "add":
             max_number = self.sequence_length * self.base**self.number_length
         elif self.op == "mult":
-            max_number = (self.base ** self.number_length - 1) ** self.sequence_length
+            max_number = (self.base**self.number_length - 1) ** self.sequence_length
         elif self.op == "div100":
             max_number = self.base**self.number_length * 100
         elif self.op == "sqdiv":
@@ -143,9 +144,9 @@ class AdditionDataset:
         if self.op in ("divmod", "sqdivmod"):
             numbers1 = torch.clip(numbers1, min=1)
             if self.op == "sqdivmod":
-                numbers0 = numbers0 ** 2
+                numbers0 = numbers0**2
                 res0 = numbers_to_digits(
-                    numbers0 // numbers1, base, max_length=2*self.number_length
+                    numbers0 // numbers1, base, max_length=2 * self.number_length
                 )
             else:
                 res0 = numbers_to_digits(
@@ -179,7 +180,7 @@ class AdditionDataset:
         # Replace leading 0s with padding
         leading_zeros_to_padding_(in_digits0, self.padding_token)
         leading_zeros_to_padding_(in_digits1, self.padding_token)
-        
+
         if self.flip:
             in_digits0 = torch.flip(in_digits0, [1])
             in_digits1 = torch.flip(in_digits1, [1])
@@ -219,5 +220,12 @@ class AdditionDataset:
             "sqdivmod": "^2 / ",
         }[self.op]
         dic[self.dot_token] = "."
-        # TODO: Support flip
-        return "".join(dic[token.item()] for token in example)
+
+        tokens = example.tolist()
+        if self.flip:
+            tokens = [
+                token
+                for key, group in itertools.groupby(tokens, key=lambda x: x < self.base)
+                for token in (reversed(list(group)) if key else group)
+            ]
+        return "".join(dic[token] for token in tokens)
