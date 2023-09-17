@@ -96,7 +96,7 @@ class AlibiTransformerLayer(nn.Module):
         self.out_proj = nn.Linear(d_model, d_model)
 
         # Cached rope mask
-        self.cos_sin = None
+        self.mask = None
 
         # Two-layer MLP unless dim_feedforward is 0, in which case we make an "attention only"
         # transformer.
@@ -104,6 +104,16 @@ class AlibiTransformerLayer(nn.Module):
             self.ffw = make_ffw(d_model, dim_feedforward, dropout)
         else:
             self.ffw = None
+
+    def ensure_mask_like(self, x):
+        seq = x.shape[-2]
+        if self.mask is not None and self.mask.shape[-1] == seq:
+            return
+        mask = torch.arange(seq)[None] + torch.arange(seq)[:, None]
+        mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
+        triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
+        mask = mask.float().to(x.device)
+        self.mask = mask.masked_fill(triu, float('-inf'))
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -113,17 +123,51 @@ class AlibiTransformerLayer(nn.Module):
         # Each of Q, K, V are now shaped (bs, head, seq, dim)
         Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
 
-        mask = torch.arange(seq)[None] + torch.arange(seq)[:, None]
-        mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
-        triu = torch.ones(seq, seq, dtype=torch.bool, device=src.device).triu(diagonal=1)
-        mask = mask.float().to(src.device)
-        mask = mask.masked_fill(triu, float('-inf'))
-        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=mask)
+        self.ensure_mask_like(src)
+        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
 
         # Recombine heads
         src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
         # Norm first for feed-forward network
         if self.ffw is not None:
             src = src + self.ffw(src)
+        return src
+
+class RNNTransformerLayer(nn.Module):
+    def __init__(self, d_model, num_heads, dim_feedforward, dropout):
+        super().__init__()
+        assert d_model % num_heads == 0
+
+        self.norm = nn.LayerNorm(d_model)
+        dh = d_model // num_heads
+        self.Qrnn = nn.RNN(dh, dh, batch_first=True)
+        self.Krnn = nn.RNN(dh, dh, batch_first=True)
+        self.WQKV = nn.Linear(d_model, 3 * d_model)
+        self.dropout_p = dropout
+        self.num_heads = num_heads
+        self.out_proj = nn.Linear(d_model, d_model)
+
+        # Cached rope mask
+        self.mask = None
+
+        self.ffw = make_ffw(d_model, dim_feedforward, dropout)
+
+    def forward(self, src):
+        bs, seq, dim = src.shape
+
+        # Norm first
+        QKV = self.WQKV(self.norm(src))
+        # Each of Q, K, V are now shaped (bs, head, seq, dim)
+        Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
+
+        #self.ensure_mask_like(src)
+        Q = self.Qrnn(Q)[0]
+        K = self.Krnn(K)[0]
+        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, is_causal=True)
+
+        # Recombine heads
+        src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
+        # Norm first for feed-forward network
+        src = src + self.ffw(src)
         return src
 

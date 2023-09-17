@@ -42,6 +42,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=2**10, help="Batch size")
     parser.add_argument(
         "--kind",
+        required=True,
         type=str,
         help="The type of neural network to use (lstm, transformer, hybrid)",
     )
@@ -57,7 +58,13 @@ def main():
         default=0,
         help="Chain of thought padding",
     )
+    parser.add_argument(
+        "--base",
+        type=int,
+        default=10,
+    )
     parser.add_argument("--compile", action="store_true")
+    parser.add_argument("--flip", action="store_true", help="Flip order of numbers")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument(
         "--num-heads",
@@ -68,10 +75,11 @@ def main():
     args = parser.parse_args()
 
     dataset = AdditionDataset(
-        base=10,
+        base=args.base,
         number_length=1,
         op=args.op,
         pre_end_padding=args.cot_padding,
+        flip=args.flip,
     )
 
     model = AdditionModel(

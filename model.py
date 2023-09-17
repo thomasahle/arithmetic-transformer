@@ -66,6 +66,7 @@ class AdditionModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 dropout=dropout,
+                # nonlinearity='relu',
                 batch_first=True,
             )
         elif kind == "gru":
@@ -94,6 +95,11 @@ class AdditionModel(nn.Module):
                 ),
                 num_layers - 1,
             )
+        elif kind == "attention-rnn":
+            self.model = nn.Sequential(*[
+                    methods.RNNTransformerLayer(hidden_size, num_heads, 0, dropout)
+                for _ in range(num_layers)
+            ])
         elif kind == "attention-rope":
             self.model = nn.Sequential(*[
                     methods.RotaryEmbeddingTransformerLayer(hidden_size, num_heads, 0, dropout)
@@ -172,7 +178,7 @@ class AdditionModel(nn.Module):
             elif self.kind == "transformer-lstm":
                 x, _ = self.base(x)
             # My own transformers don't need a causal mask
-            if self.kind in ("transformer-rope", "transformer-alibi"):
+            if self.kind in ("transformer-rope", "transformer-alibi", "transformer-rnn"):
                 x = self.model(x)
             else:
                 attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)

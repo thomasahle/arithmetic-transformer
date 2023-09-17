@@ -89,12 +89,13 @@ def leading_zeros_to_padding_(digits, padding_token):
 
 
 class AdditionDataset:
-    def __init__(self, base, number_length, op, pre_end_padding=0):
+    def __init__(self, base, number_length, op, pre_end_padding=0, flip=False):
         self.base = base
         self.number_length = number_length
         self.sequence_length = 2
         self.op = op
         self.pre_end_padding = pre_end_padding
+        self.flip = flip
 
         self.end_token = base  # After input
         self.separator_token = base + 1  # between inputs
@@ -113,13 +114,17 @@ class AdditionDataset:
         if self.op == "add":
             max_number = self.sequence_length * self.base**self.number_length
         elif self.op == "mult":
-            max_number = self.base ** (self.number_length * self.sequence_length)
+            max_number = (self.base ** self.number_length - 1) ** self.sequence_length
         elif self.op == "div100":
             max_number = self.base**self.number_length * 100
         elif self.op == "sqdiv":
             max_number = (self.base**self.number_length - 1) ** 2
         elif self.op == "divmod":
             return 2 * self.number_length + 1
+        elif self.op == "sqmod":
+            return self.number_length
+        elif self.op == "sqdivmod":
+            return 3 * self.number_length + 1
         return len(int_to_digits(max_number, self.base))
 
     @property
@@ -135,11 +140,17 @@ class AdditionDataset:
         # Add them together
         numbers0 = digits_to_numbers(in_digits0, base)
         numbers1 = digits_to_numbers(in_digits1, base)
-        if self.op == "divmod":
+        if self.op in ("divmod", "sqdivmod"):
             numbers1 = torch.clip(numbers1, min=1)
-            res0 = numbers_to_digits(
-                numbers0 // numbers1, base, max_length=self.number_length
-            )
+            if self.op == "sqdivmod":
+                numbers0 = numbers0 ** 2
+                res0 = numbers_to_digits(
+                    numbers0 // numbers1, base, max_length=2*self.number_length
+                )
+            else:
+                res0 = numbers_to_digits(
+                    numbers0 // numbers1, base, max_length=self.number_length
+                )
             res1 = numbers_to_digits(
                 numbers0 % numbers1, base, max_length=self.number_length
             )
@@ -159,12 +170,20 @@ class AdditionDataset:
             elif self.op == "sqdiv":
                 numbers1 = torch.clip(numbers1, min=1)
                 res = numbers0**2 // numbers1
+            elif self.op == "sqmod":
+                numbers1 = torch.clip(numbers1, min=1)
+                res = numbers0**2 % numbers1
             out_digits = numbers_to_digits(res, base, max_length=self.max_output_length)
             leading_zeros_to_padding_(out_digits, self.padding_token)
 
         # Replace leading 0s with padding
         leading_zeros_to_padding_(in_digits0, self.padding_token)
         leading_zeros_to_padding_(in_digits1, self.padding_token)
+        
+        if self.flip:
+            in_digits0 = torch.flip(in_digits0, [1])
+            in_digits1 = torch.flip(in_digits1, [1])
+            out_digits = torch.flip(out_digits, [1])
 
         res = torch.cat(
             [
@@ -196,6 +215,9 @@ class AdditionDataset:
             "div100": " / ",
             "divmod": " / ",
             "sqdiv": "^2 / ",
+            "sqmod": "^2 % ",
+            "sqdivmod": "^2 / ",
         }[self.op]
         dic[self.dot_token] = "."
+        # TODO: Support flip
         return "".join(dic[token.item()] for token in example)
