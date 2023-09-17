@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+import random
+import os
 
 def make_ffw(d_model, dim_feedforward, dropout):
     return nn.Sequential(
@@ -95,6 +97,11 @@ class AlibiTransformerLayer(nn.Module):
         self.num_heads = num_heads
         self.out_proj = nn.Linear(d_model, d_model)
 
+        self.ms = nn.Parameter(torch.empty(num_heads))
+        self.m1 = nn.Parameter(torch.zeros(1))
+        with torch.no_grad():
+            nn.init.uniform_(self.ms, -1, 1)
+
         self.level = level
 
         # Cached rope mask
@@ -111,16 +118,31 @@ class AlibiTransformerLayer(nn.Module):
         seq = x.shape[-2]
         if self.mask is not None and self.mask.shape[-1] == seq:
             return
-        mask = torch.arange(seq)[None] + torch.arange(seq)[:, None]
-        #mask = mask[None] * (- 2 ** -torch.arange(self.num_heads))[:, None, None]
+        mask = (torch.arange(seq)[None] + torch.arange(seq)[:, None]).to(x.device)
 
-        mask = mask[None] * (- 2. ** -torch.arange(self.num_heads))[:, None, None]
+        if os.environ['ALIBI_METHOD'] == 'normal':
+            mask = - mask[None] * (2 ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
+        elif os.environ['ALIBI_METHOD'] == 'sigmoid':
+            mask = - mask[None] * torch.sigmoid(self.ms)[:, None, None]
+        elif os.environ['ALIBI_METHOD'] == 'softmax':
+            mask = - mask[None] * torch.softmax(self.ms, 0)[:, None, None]
+        elif os.environ['ALIBI_METHOD'] == 'single':
+            mask = - mask[None] * (2 ** -(torch.arange(self.num_heads, device=x.device) * F.softplus(self.m1)))[:, None, None]
+            if random.random() < 1e-3:
+                print(self.level, 2**F.softplus(self.m1).item())
+
         # Seems higher levels should be less local, but it doesn't seem to work for me.
+        #mask = mask[None] * (- 2. ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
         # mask /= float(self.level + 1)
 
         triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
         mask = mask.float().to(x.device)
         self.mask = mask.masked_fill(triu, float('-inf'))
+
+    # normal
+    # softmax
+    # sigmoid
+    # raw weighted
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -130,8 +152,10 @@ class AlibiTransformerLayer(nn.Module):
         # Each of Q, K, V are now shaped (bs, head, seq, dim)
         Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
 
+        self.mask = None
         self.ensure_mask_like(src)
         attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
+        # attn_output = my_scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
 
         # Recombine heads
         src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
