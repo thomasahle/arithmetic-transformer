@@ -122,10 +122,18 @@ class AlibiTransformerLayer(nn.Module):
 
         if os.environ['ALIBI_METHOD'] == 'normal':
             mask = - mask[None] * (2 ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
+        elif os.environ['ALIBI_METHOD'] == 'exp':
+            mask = - mask[None] * torch.exp(self.ms)[:, None, None]
+            if random.random() < 1e-3:
+                print(self.level, torch.exp(self.ms).sort().values.round(decimals=3).detach())
         elif os.environ['ALIBI_METHOD'] == 'sigmoid':
             mask = - mask[None] * torch.sigmoid(self.ms)[:, None, None]
+            if random.random() < 1e-3:
+                print(self.level, torch.sigmoid(self.ms).sort().values.round(decimals=3).detach())
         elif os.environ['ALIBI_METHOD'] == 'softmax':
             mask = - mask[None] * torch.softmax(self.ms, 0)[:, None, None]
+            if random.random() < 1e-3:
+                print(self.level, torch.softmax(self.ms, 0).sort().values.round(decimals=3).detach())
         elif os.environ['ALIBI_METHOD'] == 'single':
             mask = - mask[None] * (2 ** -(torch.arange(self.num_heads, device=x.device) * F.softplus(self.m1)))[:, None, None]
             if random.random() < 1e-3:
