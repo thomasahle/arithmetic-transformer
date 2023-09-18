@@ -100,7 +100,7 @@ class AlibiTransformerLayer(nn.Module):
         self.ms = nn.Parameter(torch.empty(num_heads))
         self.m1 = nn.Parameter(torch.zeros(1))
         with torch.no_grad():
-            nn.init.uniform_(self.ms, -1, 1)
+            self.ms[:] = - torch.arange(0, num_heads)
 
         self.level = level
 
