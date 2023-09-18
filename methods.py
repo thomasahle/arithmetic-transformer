@@ -100,6 +100,7 @@ class AlibiTransformerLayer(nn.Module):
         self.ms = nn.Parameter(torch.empty(num_heads))
         self.m1 = nn.Parameter(torch.zeros(1))
         with torch.no_grad():
+            # Initialize to be roughly what ALiBi sets them as
             self.ms[:] = - torch.arange(0, num_heads)
 
         self.level = level
@@ -118,39 +119,35 @@ class AlibiTransformerLayer(nn.Module):
         seq = x.shape[-2]
         if self.mask is not None and self.mask.shape[-1] == seq:
             return
-        mask = (torch.arange(seq)[None] + torch.arange(seq)[:, None]).to(x.device)
+        #mask = (torch.arange(seq)[None] + torch.arange(seq)[:, None])
+        mask = torch.arange(seq)[None] + torch.arange(seq-1, -1, -1)[:, None] - (seq-1)
+        mask = mask.to(x.device)
 
-        if os.environ['ALIBI_METHOD'] == 'normal':
-            mask = - mask[None] * (2 ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
-        elif os.environ['ALIBI_METHOD'] == 'exp':
-            mask = - mask[None] * torch.exp(self.ms)[:, None, None]
-            if random.random() < 1e-3:
-                print(self.level, torch.exp(self.ms).sort().values.round(decimals=3).detach())
-        elif os.environ['ALIBI_METHOD'] == 'sigmoid':
-            mask = - mask[None] * torch.sigmoid(self.ms)[:, None, None]
-            if random.random() < 1e-3:
-                print(self.level, torch.sigmoid(self.ms).sort().values.round(decimals=3).detach())
-        elif os.environ['ALIBI_METHOD'] == 'softmax':
-            mask = - mask[None] * torch.softmax(self.ms, 0)[:, None, None]
-            if random.random() < 1e-3:
-                print(self.level, torch.softmax(self.ms, 0).sort().values.round(decimals=3).detach())
-        elif os.environ['ALIBI_METHOD'] == 'single':
-            mask = - mask[None] * (2 ** -(torch.arange(self.num_heads, device=x.device) * F.softplus(self.m1)))[:, None, None]
-            if random.random() < 1e-3:
-                print(self.level, 2**F.softplus(self.m1).item())
+        match os.environ.get('ALIBI_METHOD'):
+            case 'exp':
+                mask = mask[None] * torch.exp(self.ms)[:, None, None]
+                if random.random() < 1e-3:
+                    print(self.level, torch.exp(self.ms).sort().values.round(decimals=3).detach())
+            case 'sigmoid':
+                mask = mask[None] * torch.sigmoid(self.ms)[:, None, None]
+                if random.random() < 1e-3:
+                    print(self.level, torch.sigmoid(self.ms).sort().values.round(decimals=3).detach())
+            case 'softmax':
+                mask = mask[None] * torch.softmax(self.ms, 0)[:, None, None]
+                if random.random() < 1e-3:
+                    print(self.level, torch.softmax(self.ms, 0).sort().values.round(decimals=3).detach())
+            case 'single':
+                mask = mask[None] * (2 ** -(torch.arange(self.num_heads, device=x.device) * F.softplus(self.m1)))[:, None, None]
+                if random.random() < 1e-3:
+                    print(self.level, 2**F.softplus(self.m1).item())
+            case _:
+                # Normal alibi exponential approach
+                mask = mask[None] * (2 ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
 
-        # Seems higher levels should be less local, but it doesn't seem to work for me.
-        #mask = mask[None] * (- 2. ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
-        # mask /= float(self.level + 1)
-
+        # This is the normal alibi method, of allowing 0 on the diagonal
         triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
-        mask = mask.float().to(x.device)
-        self.mask = mask.masked_fill(triu, float('-inf'))
 
-    # normal
-    # softmax
-    # sigmoid
-    # raw weighted
+        self.mask = mask.float().masked_fill(triu, float('-inf'))
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -163,7 +160,6 @@ class AlibiTransformerLayer(nn.Module):
         self.mask = None
         self.ensure_mask_like(src)
         attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
-        # attn_output = my_scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
 
         # Recombine heads
         src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
