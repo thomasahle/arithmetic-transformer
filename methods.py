@@ -12,7 +12,7 @@ class ChannelDropout(nn.Module):
 
     def forward(self, x):
         x_reshaped = x.reshape((-1,) + x.shape[-2:])
-        x_dropped = F.dropout1d(x_reshaped, self.p, self.training, inplace=True)
+        x_dropped = F.dropout1d(x_reshaped, self.p, self.training, inplace=False)
         return x_dropped.reshape(*x.shape)
 
 def make_ffw(d_model, dim_feedforward, dropout):
