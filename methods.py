@@ -4,6 +4,17 @@ import torch.nn as nn
 import random
 import os
 
+
+class ChannelDropout(nn.Module):
+    def __init__(self, p=0.5):
+        super(ChannelDropout, self).__init__()
+        self.p = p
+
+    def forward(self, x):
+        x_reshaped = x.reshape((-1,) + x.shape[-2:])
+        x_dropped = F.dropout1d(x_reshaped, self.p, self.training, inplace=True)
+        return x_dropped.reshape(*x.shape)
+
 def make_ffw(d_model, dim_feedforward, dropout):
     return nn.Sequential(
         nn.LayerNorm(d_model),
@@ -24,6 +35,13 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         self.dropout_p = dropout
         self.num_heads = num_heads
         self.out_proj = nn.Linear(d_model, d_model)
+
+        if os.environ.get('DROP_MODE') in ('channel', 'head'):
+            self.dropout_p = 0
+            self.Q_dropout = ChannelDropout(dropout)
+            self.K_dropout = ChannelDropout(dropout)
+        if os.environ.get('DROP_MODE') in ('head', 'head-only'):
+            self.head_dropout = ChannelDropout(dropout)
 
         # Cached rope mask
         self.cos_sin = None
@@ -74,10 +92,20 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         Q = self.apply_rope(Q)
         K = self.apply_rope(K)
 
+        # Try channel wise dropout instead of normal transformer dropout
+        if os.environ.get('DROP_MODE') in ('channel', 'head'):
+            Q = self.Q_dropout(Q)
+            K = self.K_dropout(K)
+
         # Self attention with causal mask
         attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, is_causal=True)
-        # Combine heads
-        attn_output = attn_output.permute(0, 2, 1, 3).flatten(2, 3)
+        # Combine heads by swapping head and sequence channels
+        attn_output = attn_output.permute(0, 2, 1, 3)
+        # Head dropout!
+        if os.environ.get('DROP_MODE') in ('head', 'head-only'):
+            attn_output = self.head_dropout(attn_output)
+        # Comibne head and head dimension
+        attn_output = attn_output.flatten(2, 3)
         src = src + self.out_proj(attn_output)
 
         # Norm first for feed-forward network
@@ -148,6 +176,8 @@ class AlibiTransformerLayer(nn.Module):
         triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
 
         self.mask = mask.float().masked_fill(triu, float('-inf'))
+        if random.random() < 1e-3:
+            print(self.mask)
 
     def forward(self, src):
         bs, seq, dim = src.shape

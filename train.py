@@ -26,7 +26,7 @@ def main():
     parser.add_argument(
         "--acc-next", type=float, default=0.9, help="Accuracy before next level"
     )
-    parser.add_argument("--dropout", type=float, default=0)
+    parser.add_argument("--dropout", type=float, default=0.05)
     parser.add_argument(
         "--hidden-size",
         type=int,
