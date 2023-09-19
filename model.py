@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 
-from dataset import AdditionDataset
 import methods
 
 
@@ -60,6 +59,7 @@ class AdditionModel(nn.Module):
                 batch_first=True,
                 bidirectional=False,
             )
+            print(self.model)
         elif kind == "rnn":
             self.model = nn.RNN(
                 input_size=hidden_size,
@@ -96,25 +96,39 @@ class AdditionModel(nn.Module):
                 num_layers - 1,
             )
         elif kind == "attention-rnn":
-            self.model = nn.Sequential(*[
+            self.model = nn.Sequential(
+                *[
                     methods.RNNTransformerLayer(hidden_size, num_heads, 0, dropout)
-                for i in range(num_layers)
-            ])
+                    for i in range(num_layers)
+                ]
+            )
         elif kind == "attention-rope":
-            self.model = nn.Sequential(*[
-                    methods.RotaryEmbeddingTransformerLayer(hidden_size, num_heads, 0, dropout)
-                for _ in range(num_layers)
-            ])
+            self.model = nn.Sequential(
+                *[
+                    methods.RotaryEmbeddingTransformerLayer(
+                        hidden_size, num_heads, 0, dropout
+                    )
+                    for _ in range(num_layers)
+                ]
+            )
         elif kind == "transformer-rope":
-            self.model = nn.Sequential(*[
-                    methods.RotaryEmbeddingTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout)
-                for _ in range(num_layers)
-            ])
+            self.model = nn.Sequential(
+                *[
+                    methods.RotaryEmbeddingTransformerLayer(
+                        hidden_size, num_heads, hidden_size * 2, dropout
+                    )
+                    for _ in range(num_layers)
+                ]
+            )
         elif kind == "transformer-alibi":
-            self.model = nn.Sequential(*[
-                    methods.AlibiTransformerLayer(hidden_size, num_heads, hidden_size * 2, dropout, i)
-                for i in range(num_layers)
-            ])
+            self.model = nn.Sequential(
+                *[
+                    methods.AlibiTransformerLayer(
+                        hidden_size, num_heads, hidden_size * 2, dropout, i
+                    )
+                    for i in range(num_layers)
+                ]
+            )
         elif kind.startswith("transformer"):
             if kind == "transformer":
                 self.pos_emb = nn.Embedding(seq, hidden_size)
@@ -151,7 +165,7 @@ class AdditionModel(nn.Module):
         else:
             raise Error(f"Kind {kind} is not supported")
         self.norm = nn.LayerNorm(hidden_size)
-        self.fc = nn.Linear(hidden_size, hidden_size)
+        self.fc = nn.Linear(hidden_size, ds.n_tokens)
 
     def forward(self, x):
         # x.shape = (batch, seq)
@@ -163,11 +177,17 @@ class AdditionModel(nn.Module):
         elif self.kind.startswith("transformer"):
             if self.kind == "transformer":
                 if self.pos_emb.num_embeddings < seq:
-                    print(f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {seq}")
+                    print(
+                        f"Increasing pos embedding size from {self.pos_emb.num_embeddings} to {seq}"
+                    )
                     with torch.no_grad():
-                        new_pos_emb = nn.Embedding(seq, self.pos_emb.embedding_dim).to(x.device)
+                        new_pos_emb = nn.Embedding(seq, self.pos_emb.embedding_dim).to(
+                            x.device
+                        )
                         # Copy old positional embeddings
-                        new_pos_emb.weight[: self.pos_emb.num_embeddings] = self.pos_emb.weight
+                        new_pos_emb.weight[
+                            : self.pos_emb.num_embeddings
+                        ] = self.pos_emb.weight
                         self.pos_emb = new_pos_emb
                 positions = torch.arange(seq).unsqueeze(0).to(x.device)
                 emb = self.pos_emb(positions).to(x.device)
@@ -178,10 +198,16 @@ class AdditionModel(nn.Module):
             elif self.kind == "transformer-lstm":
                 x, _ = self.base(x)
             # My own transformers don't need a causal mask
-            if self.kind in ("transformer-rope", "transformer-alibi", "transformer-rnn"):
+            if self.kind in (
+                "transformer-rope",
+                "transformer-alibi",
+                "transformer-rnn",
+            ):
                 x = self.model(x)
             else:
-                attn_mask = nn.Transformer.generate_square_subsequent_mask(seq, x.device)
+                attn_mask = nn.Transformer.generate_square_subsequent_mask(
+                    seq, x.device
+                )
                 x = self.model(x, mask=attn_mask, is_causal=True)
         elif self.kind == "hybrid":
             x, _ = self.model1(x)
@@ -231,7 +257,11 @@ class AdditionModel(nn.Module):
         input_sequence = torch.cat(
             [
                 input_sequence,
-                torch.full((self.ds.seq - n,), self.ds.padding_token, device=input_sequence.device),
+                torch.full(
+                    (self.ds.seq - n,),
+                    self.ds.padding_token,
+                    device=input_sequence.device,
+                ),
             ]
         )
         with torch.no_grad():
@@ -257,7 +287,11 @@ class AdditionModel(nn.Module):
                 examples[i] = self.ds.generate_batch(1)[0]
                 continue
             print("Example:", self.ds.repr_example(example))
-            print("Output: ", self.ds.repr_example(raw_prediction), f"({'Correct' if is_correct else 'Wrong'})")
+            print(
+                "Output: ",
+                self.ds.repr_example(raw_prediction),
+                f"({'Correct' if is_correct else 'Wrong'})",
+            )
             print("Raw In: ", example.tolist())
             print("Raw Out:", raw_prediction.tolist())
             i += 1

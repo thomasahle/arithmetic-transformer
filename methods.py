@@ -15,6 +15,7 @@ class ChannelDropout(nn.Module):
         x_dropped = F.dropout1d(x_reshaped, self.p, self.training, inplace=False)
         return x_dropped.reshape(*x.shape)
 
+
 def make_ffw(d_model, dim_feedforward, dropout):
     return nn.Sequential(
         nn.LayerNorm(d_model),
@@ -24,6 +25,7 @@ def make_ffw(d_model, dim_feedforward, dropout):
         nn.Linear(dim_feedforward, d_model),
         nn.Dropout(dropout),
     )
+
 
 class RotaryEmbeddingTransformerLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout):
@@ -36,11 +38,14 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         self.num_heads = num_heads
         self.out_proj = nn.Linear(d_model, d_model)
 
-        if os.environ.get('DROP_MODE') in ('channel', 'head'):
+        self.QKV_dropout = nn.Dropout(dropout)
+        self.O_dropout = nn.Dropout(dropout)
+
+        if os.environ.get("DROP_MODE") in ("channel", "head"):
             self.dropout_p = 0
             self.Q_dropout = ChannelDropout(dropout)
             self.K_dropout = ChannelDropout(dropout)
-        if os.environ.get('DROP_MODE') in ('head', 'head-only'):
+        if os.environ.get("DROP_MODE") in ("head", "head-only"):
             self.head_dropout = ChannelDropout(dropout)
 
         # Cached rope mask
@@ -52,7 +57,6 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
             self.ffw = make_ffw(d_model, dim_feedforward, dropout)
         else:
             self.ffw = None
-
 
     def apply_rope(self, src):
         self.ensure_cos_sin_like(src)
@@ -69,50 +73,56 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
 
     @torch.no_grad()
     def ensure_cos_sin_like(self, x):
-        seq, dim = x.shape[-2: ]
+        seq, dim = x.shape[-2:]
         # Test if we already have a cos_sin of the right size
         if self.cos_sin is not None and self.cos_sin[0].shape == (seq, dim):
             return
         # Outer product of m * theta^(1000/k)
         outer = torch.outer(
-                torch.arange(0, seq),
-                1. / (10000 ** (torch.arange(0, dim, 2) / dim))
-            ).to(x.device)
+            torch.arange(0, seq), 1.0 / (10000 ** (torch.arange(0, dim, 2) / dim))
+        ).to(x.device)
         self.cos_sin = (outer.cos(), outer.sin())
 
     def forward(self, src):
         bs, seq, dim = src.shape
 
         # Norm first
-        QKV = self.WQKV(self.norm(src))
+        QKV = self.QKV_dropout(self.WQKV(self.norm(src)))
         # Each of Q, K, V are now shaped (bs, head, seq, dim)
-        Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
+        Q, K, V = QKV.reshape(
+            bs, seq, 3, self.num_heads, dim // self.num_heads
+        ).permute(2, 0, 3, 1, 4)
 
         # Apply rotary embeddings to Q and K
         Q = self.apply_rope(Q)
         K = self.apply_rope(K)
 
         # Try channel wise dropout instead of normal transformer dropout
-        if os.environ.get('DROP_MODE') in ('channel', 'head'):
+        if os.environ.get("DROP_MODE") in ("channel", "head"):
             Q = self.Q_dropout(Q)
             K = self.K_dropout(K)
 
         # Self attention with causal mask
-        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, is_causal=True)
+        attn_output = F.scaled_dot_product_attention(
+            Q, K, V, dropout_p=self.dropout_p, is_causal=True
+        )
         # Combine heads by swapping head and sequence channels
         attn_output = attn_output.permute(0, 2, 1, 3)
         # Head dropout!
-        if os.environ.get('DROP_MODE') in ('head', 'head-only'):
+        if os.environ.get("DROP_MODE") in ("head", "head-only"):
             attn_output = self.head_dropout(attn_output)
         # Comibne head and head dimension
         attn_output = attn_output.flatten(2, 3)
-        src = src + self.out_proj(attn_output)
+        # Out projection
+        O = self.O_dropout(self.out_proj(attn_output))
+        src = src + O
 
         # Norm first for feed-forward network
         if self.ffw is not None:
             src = src + self.ffw(src)
 
         return src
+
 
 class AlibiTransformerLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout, level):
@@ -129,7 +139,7 @@ class AlibiTransformerLayer(nn.Module):
         self.m1 = nn.Parameter(torch.zeros(1))
         with torch.no_grad():
             # Initialize to be roughly what ALiBi sets them as
-            self.ms[:] = - torch.arange(0, num_heads)
+            self.ms[:] = -torch.arange(0, num_heads)
 
         self.level = level
 
@@ -147,37 +157,62 @@ class AlibiTransformerLayer(nn.Module):
         seq = x.shape[-2]
         if self.mask is not None and self.mask.shape[-1] == seq:
             return
-        #mask = (torch.arange(seq)[None] + torch.arange(seq)[:, None])
-        mask = torch.arange(seq)[None] + torch.arange(seq-1, -1, -1)[:, None] - (seq-1)
+        # mask = (torch.arange(seq)[None] + torch.arange(seq)[:, None])
+        mask = (
+            torch.arange(seq)[None] + torch.arange(seq - 1, -1, -1)[:, None] - (seq - 1)
+        )
         mask = mask.to(x.device)
 
-        match os.environ.get('ALIBI_METHOD'):
-            case 'exp':
+        match os.environ.get("ALIBI_METHOD"):
+            case "exp":
                 mask = mask[None] * torch.exp(self.ms)[:, None, None]
                 if random.random() < 1e-3:
-                    print(self.level, torch.exp(self.ms).sort().values.round(decimals=3).detach())
-            case 'sigmoid':
+                    print(
+                        self.level,
+                        torch.exp(self.ms).sort().values.round(decimals=3).detach(),
+                    )
+            case "sigmoid":
                 mask = mask[None] * torch.sigmoid(self.ms)[:, None, None]
                 if random.random() < 1e-3:
-                    print(self.level, torch.sigmoid(self.ms).sort().values.round(decimals=3).detach())
-            case 'softmax':
+                    print(
+                        self.level,
+                        torch.sigmoid(self.ms).sort().values.round(decimals=3).detach(),
+                    )
+            case "softmax":
                 mask = mask[None] * torch.softmax(self.ms, 0)[:, None, None]
                 if random.random() < 1e-3:
-                    print(self.level, torch.softmax(self.ms, 0).sort().values.round(decimals=3).detach())
-            case 'single':
-                mask = mask[None] * (2 ** -(torch.arange(self.num_heads, device=x.device) * F.softplus(self.m1)))[:, None, None]
+                    print(
+                        self.level,
+                        torch.softmax(self.ms, 0)
+                        .sort()
+                        .values.round(decimals=3)
+                        .detach(),
+                    )
+            case "single":
+                mask = (
+                    mask[None]
+                    * (
+                        2
+                        ** -(
+                            torch.arange(self.num_heads, device=x.device)
+                            * F.softplus(self.m1)
+                        )
+                    )[:, None, None]
+                )
                 if random.random() < 1e-3:
-                    print(self.level, 2**F.softplus(self.m1).item())
+                    print(self.level, 2 ** F.softplus(self.m1).item())
             case _:
                 # Normal alibi exponential approach
-                mask = mask[None] * (2 ** -torch.arange(self.num_heads))[:, None, None].to(x.device)
+                mask = mask[None] * (2 ** -torch.arange(self.num_heads))[
+                    :, None, None
+                ].to(x.device)
 
         # This is the normal alibi method, of allowing 0 on the diagonal
         triu = torch.ones(seq, seq, dtype=torch.bool, device=x.device).triu(diagonal=1)
 
-        self.mask = mask.float().masked_fill(triu, float('-inf'))
-        if random.random() < 1e-3:
-            print(self.mask)
+        self.mask = mask.float().masked_fill(triu, float("-inf"))
+        # if random.random() < 1e-3:
+        #     print(self.mask)
 
     def forward(self, src):
         bs, seq, dim = src.shape
@@ -185,11 +220,15 @@ class AlibiTransformerLayer(nn.Module):
         # Norm first
         QKV = self.WQKV(self.norm(src))
         # Each of Q, K, V are now shaped (bs, head, seq, dim)
-        Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
+        Q, K, V = QKV.reshape(
+            bs, seq, 3, self.num_heads, dim // self.num_heads
+        ).permute(2, 0, 3, 1, 4)
 
         self.mask = None
         self.ensure_mask_like(src)
-        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask)
+        attn_output = F.scaled_dot_product_attention(
+            Q, K, V, dropout_p=self.dropout_p, attn_mask=self.mask
+        )
 
         # Recombine heads
         src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
@@ -197,6 +236,7 @@ class AlibiTransformerLayer(nn.Module):
         if self.ffw is not None:
             src = src + self.ffw(src)
         return src
+
 
 class RNNTransformerLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout):
@@ -223,16 +263,19 @@ class RNNTransformerLayer(nn.Module):
         # Norm first
         QKV = self.WQKV(self.norm(src))
         # Each of Q, K, V are now shaped (bs, head, seq, dim)
-        Q, K, V = QKV.reshape(bs, seq, 3, self.num_heads, dim//self.num_heads).permute(2, 0, 3, 1, 4)
+        Q, K, V = QKV.reshape(
+            bs, seq, 3, self.num_heads, dim // self.num_heads
+        ).permute(2, 0, 3, 1, 4)
 
-        #self.ensure_mask_like(src)
+        # self.ensure_mask_like(src)
         Q = self.Qrnn(Q)[0]
         K = self.Krnn(K)[0]
-        attn_output = F.scaled_dot_product_attention(Q, K, V, dropout_p=self.dropout_p, is_causal=True)
+        attn_output = F.scaled_dot_product_attention(
+            Q, K, V, dropout_p=self.dropout_p, is_causal=True
+        )
 
         # Recombine heads
         src = src + self.out_proj(attn_output.permute(0, 2, 1, 3).flatten(2, 3))
         # Norm first for feed-forward network
         src = src + self.ffw(src)
         return src
-

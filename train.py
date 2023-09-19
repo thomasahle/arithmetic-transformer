@@ -5,7 +5,7 @@ import tqdm
 from collections import Counter
 import torch.nn.functional as F
 
-from dataset import AdditionDataset
+import dataset as my_datasets
 from model import AdditionModel
 
 
@@ -74,13 +74,7 @@ def main():
     )
     args = parser.parse_args()
 
-    dataset = AdditionDataset(
-        base=args.base,
-        number_length=1,
-        op=args.op,
-        pre_end_padding=args.cot_padding,
-        flip=args.flip,
-    )
+    dataset = make_dataset(args)
 
     model = AdditionModel(
         ds=dataset,
@@ -99,11 +93,62 @@ def main():
     manual_training(model, dataset, args)
 
 
+def make_dataset(args, number_length=1):
+    kvargs = dict(
+        base=args.base,
+        number_length=number_length,
+        pre_end_padding=args.cot_padding,
+        flip=args.flip,
+    )
+    if args.op == "addmod":
+        return my_datasets.AddModDataset(**kvargs)
+    elif args.op == "divmod":
+        return my_datasets.DivModDataset(**kvargs)
+    elif args.op == "add":
+        return my_datasets.BinaryOpDataset(
+            func=(lambda a, b: a + b),
+            sep="+",
+            out_length=number_length + 1,
+            **kvargs,
+        )
+    elif args.op == "mult":
+        return my_datasets.BinaryOpDataset(
+            func=(lambda a, b: a * b),
+            sep="*",
+            out_length=2 * number_length,
+            **kvargs,
+        )
+    elif args.op == "div":
+        return my_datasets.BinaryOpDataset(
+            func=(lambda a, b: a // b),
+            sep="//",
+            min_b=1,
+            out_length=number_length,
+            **kvargs,
+        )
+    elif args.op == "mod":
+        return my_datasets.BinaryOpDataset(
+            func=(lambda a, b: a % b),
+            sep="%",
+            min_b=1,
+            out_length=number_length,
+            **kvargs,
+        )
+    elif args.op == "sqmod":
+        return my_datasets.BinaryOpDataset(
+            func=(lambda a, b: a**2 % b),
+            sep="^2 %",
+            min_b=1,
+            out_length=2 * number_length,
+            **kvargs,
+        )
+
+
 def answer_mask(dataset, batch):
     """Creates a mask of everything after the END (or =) token, which separates the question
     from the answer."""
-    mask = (torch.cumsum(batch == dataset.end_token, dim=1) == 1)
-    mask &= (batch != dataset.end_token)
+    mask = torch.cumsum(batch == dataset.end_token, dim=1) == 1
+    mask &= batch != dataset.end_token
     return mask[:, 1:]
 
 
@@ -125,13 +170,16 @@ def validation_step(model, batch):
     out = model(batch)[:, :-1]
     preds = torch.argmax(out, dim=2)
 
+    # print(f'{truth[0]=}')
+    # print(f'{preds[0]=}')
+
     # We'd to test that our validation method matches what you get with generate.
     # Unfortunately the LSTMs give slightly different results when passing a batch,
     # vs when passing one element at a time, which breaks the direct correspondance.
     for i in range(0):
         n = batch[i].tolist().index(model.ds.end_token) + 1
         true = batch[i, n:]
-        pred0 = preds[i, n-1:]
+        pred0 = preds[i, n - 1 :]
         pred1 = model.generate(batch[i][:n])
         if torch.all((preds * mask)[i] == (truth * mask)[i]):
             assert torch.all(pred0 == true)
@@ -191,14 +239,15 @@ def manual_training(model, dataset, args):
 
         # Print some examples. Try to always include an example where the model is wrong.
         # But if the model is nearly perfect, don't bother, since we might search forever.
-        model.print_examples(3, must_include_a_wrong=acc<args.acc_next)
+        model.print_examples(3, must_include_a_wrong=acc < args.acc_next)
 
         time_to_success[dataset.number_length] += 1
 
         print("Epochs per digit:", sorted(time_to_success.items()))
         if acc > args.acc_next:
             print(f"Switching to number length {dataset.number_length+1}")
-            dataset.number_length += 1
+            dataset = make_dataset(args, number_length=dataset.number_length + 1)
+            model.ds = dataset
 
 
 if __name__ == "__main__":
