@@ -117,7 +117,7 @@ class AdditionModel(nn.Module):
             self.model = nn.Sequential(
                 *[
                     methods.RotaryEmbeddingTransformerLayer(
-                        hidden_size, ffw_size, num_heads, hidden_size * 2, dropout
+                        hidden_size, num_heads, ffw_size, dropout
                     )
                     for _ in range(num_layers)
                 ]
@@ -126,7 +126,7 @@ class AdditionModel(nn.Module):
             self.model = nn.Sequential(
                 *[
                     methods.AlibiTransformerLayer(
-                        hidden_size, ffw_size, num_heads, hidden_size * 2, dropout, i
+                        hidden_size, num_heads, ffw_size, dropout, i
                     )
                     for i in range(num_layers)
                 ]
