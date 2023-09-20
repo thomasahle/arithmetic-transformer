@@ -26,6 +26,16 @@ def make_ffw(d_model, dim_feedforward, dropout):
         nn.Dropout(dropout),
     )
 
+def apply_rope(model, x):
+    seq, dim = x.shape[-2:]
+    # Cache cos/sin matrix
+    if getattr(model, 'cos_sin', None) is None or model.cos_sin[0].shape == (seq, dim):
+        outer = torch.outer(
+            torch.arange(0, seq), 1.0 / (10000 ** (torch.arange(0, dim, 2) / dim))
+        ).to(x.device)
+        model.cos_sin = (outer.cos(), outer.sin())
+
+
 
 class RotaryEmbeddingTransformerLayer(nn.Module):
     def __init__(self, d_model, num_heads, dim_feedforward, dropout):
@@ -41,6 +51,11 @@ class RotaryEmbeddingTransformerLayer(nn.Module):
         self.QKV_dropout = nn.Dropout(dropout)
         self.O_dropout = nn.Dropout(dropout)
 
+        # head: [(1, 1), (2, 2), (3, 7), (4, 6), (5, 8), (6, 25), (7, 54), (8, 70), (9, 50)]
+        # channel: [(1, 1), (2, 2), (3, 6), (4, 11), (5, 9), (6, 21), (7, 36), (8, 82), (9, 54)]
+        # normal: [(1, 1), (2, 2), (3, 7), (4, 15), (5, 37), (6, 68), (7, 106)]
+        # normal: [(1, 1), (2, 2), (3, 8), (4, 12), (5, 14), (6, 44), (7, 151), (8, 341), (9, 151)]
+        # head-only: [(1, 1), (2, 2), (3, 7), (4, 22), (5, 37), (6, 72), (7, 98)]
         if os.environ.get("DROP_MODE") in ("channel", "head"):
             self.dropout_p = 0
             self.Q_dropout = ChannelDropout(dropout)

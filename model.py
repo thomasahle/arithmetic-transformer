@@ -38,6 +38,7 @@ class AdditionModel(nn.Module):
         kind,
         ds,
         hidden_size,
+        ffw_size,
         num_layers,
         num_heads,
         lr,
@@ -83,11 +84,12 @@ class AdditionModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=1,
                 batch_first=True,
+                bidirectional=False,
             )
             self.model = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(
                     d_model=hidden_size,
-                    dim_feedforward=hidden_size * 2,
+                    dim_feedforward=ffw_size,
                     nhead=num_heads,
                     norm_first=True,
                     dropout=dropout,
@@ -98,7 +100,7 @@ class AdditionModel(nn.Module):
         elif kind == "attention-rnn":
             self.model = nn.Sequential(
                 *[
-                    methods.RNNTransformerLayer(hidden_size, num_heads, 0, dropout)
+                    methods.RNNTransformerLayer(hidden_size, ffw_size, num_heads, 0, dropout)
                     for i in range(num_layers)
                 ]
             )
@@ -106,7 +108,7 @@ class AdditionModel(nn.Module):
             self.model = nn.Sequential(
                 *[
                     methods.RotaryEmbeddingTransformerLayer(
-                        hidden_size, num_heads, 0, dropout
+                        hidden_size, ffw_size, num_heads, 0, dropout
                     )
                     for _ in range(num_layers)
                 ]
@@ -115,7 +117,7 @@ class AdditionModel(nn.Module):
             self.model = nn.Sequential(
                 *[
                     methods.RotaryEmbeddingTransformerLayer(
-                        hidden_size, num_heads, hidden_size * 2, dropout
+                        hidden_size, ffw_size, num_heads, hidden_size * 2, dropout
                     )
                     for _ in range(num_layers)
                 ]
@@ -124,7 +126,7 @@ class AdditionModel(nn.Module):
             self.model = nn.Sequential(
                 *[
                     methods.AlibiTransformerLayer(
-                        hidden_size, num_heads, hidden_size * 2, dropout, i
+                        hidden_size, ffw_size, num_heads, hidden_size * 2, dropout, i
                     )
                     for i in range(num_layers)
                 ]
@@ -135,7 +137,7 @@ class AdditionModel(nn.Module):
             self.model = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(
                     d_model=hidden_size,
-                    dim_feedforward=hidden_size * 2,
+                    dim_feedforward=ffw_size,
                     nhead=num_heads,
                     norm_first=True,
                     dropout=dropout,
@@ -150,11 +152,12 @@ class AdditionModel(nn.Module):
                 num_layers=(num_layers + 1) // 2,
                 dropout=dropout,
                 batch_first=True,
+                bidirectional=False,
             )
             self.model2 = nn.TransformerEncoder(
                 nn.TransformerEncoderLayer(
                     d_model=hidden_size,
-                    dim_feedforward=hidden_size * 2,
+                    dim_feedforward=ffw_size,
                     nhead=num_heads,
                     norm_first=True,
                     dropout=dropout,

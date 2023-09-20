@@ -26,12 +26,22 @@ def main():
     parser.add_argument(
         "--acc-next", type=float, default=0.9, help="Accuracy before next level"
     )
+    # 0.05: [(1, 1), (2, 2), (3, 8), (4, 11), (5, 25), (6, 76), (7, 206+)]
+    # 0.04: [(1, 1), (2, 2), (3, 8), (4, 7),  (5, 17), (6, 44), (7, 142), (8, 80+)]
+    # 0.03: [(1, 1), (2, 2), (3, 9), (4, 7),  (5, 11), (6, 32), (7, 121), (8, 110+)]
+    # 0.02: [(1, 1), (2, 2), (3, 8), (4, 8),  (5, 18), (6, 29), (7, 105), (8, 118+)]
+    # 0.01: [(1, 1), (2, 2), (3, 8), (4, 12), (5, 14), (6, 44), (7, 151), (8, 341), (9, 151)]
     parser.add_argument("--dropout", type=float, default=0.05)
     parser.add_argument(
         "--hidden-size",
         type=int,
         default=32,
         help="The hidden size for the neural network",
+    )
+    parser.add_argument(
+        "--ffw-size",
+        type=int,
+        default=None,
     )
     parser.add_argument(
         "--num-layers",
@@ -80,6 +90,7 @@ def main():
         ds=dataset,
         kind=args.kind,
         hidden_size=args.hidden_size,
+        ffw_size=2 * args.hidden_size if args.ffw_size is None else args.ffw_size,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
         lr=args.lr,
