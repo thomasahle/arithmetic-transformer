@@ -153,6 +153,8 @@ def make_dataset(args, number_length=1):
             out_length=2 * number_length,
             **kvargs,
         )
+    elif args.op == "factor":
+        return my_datasets.FactorDataset(**kvargs)
 
 
 def answer_mask(dataset, batch):

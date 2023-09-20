@@ -227,3 +227,73 @@ class DivModDataset(Dataset):
     @property
     def seq(self):
         return self.number_length * 4 + 5
+
+
+class FactorDataset(Dataset):
+    def __init__(self, base, number_length, pre_end_padding=0, flip=False):
+        super().__init__(base, number_length, pre_end_padding, flip)
+        self.dic[self.separator_token] = ","
+        self.primes = None
+        self.primes_length = 0
+
+    def get_primes(self, number_length):
+        if self.primes_length == number_length:
+            return self.primes
+        n = self.base ** self.number_length
+        sieve = torch.ones(n, dtype=torch.bool)
+        # We include 1, but not 0
+        sieve[0] = False
+        for i in range(2, n):
+            if sieve[i]:
+                sieve[i*i::i] = False
+        self.primes = torch.nonzero(sieve).squeeze()
+        self.primes_length = self.number_length
+        return self.primes
+
+    @property
+    def max_factors(self):
+        return int(math.log2(self.base) * self.number_length)
+
+    @property
+    def seq(self):
+        # task is "length", answer is longest if all factors are 2.
+        # finally 3 extra tokens: start, end and eos.
+        # actually one less, because we need one separator less than factors
+        return self.number_length + 2 * self.max_factors + 2
+
+    def _generate_batch(self, bs):
+        primes = self.get_primes(self.number_length)
+        weights = 1/primes
+        # Using rejection sampling to 
+        for c in itertools.count(2):
+            indices = torch.multinomial(weights, num_samples=2**c * bs * self.max_factors, replacement=True)
+            sampled_primes = primes[indices].reshape(2**c * bs, self.max_factors)
+            prods = torch.prod(sampled_primes, dim=1)
+            mask = prods < self.base ** self.number_length
+            if mask.sum() < bs:
+                print(f'Notice: Got {mask.sum()} primes, wanted {bs}.')
+                continue
+            filtered_primes = sampled_primes[mask][:bs]
+            prods = prods[mask][:bs]
+            break
+        filtered_primes = filtered_primes.sort(dim=1).values
+        parts = [
+            torch.full((bs, 1), self.start_token),
+            self.to_digits(prods),
+            torch.full((bs, 1), self.end_token),
+        ]
+        for i in range(self.max_factors):
+            parts += [
+                self.to_digits(filtered_primes[:, i]),
+                torch.full((bs, 1), self.separator_token),
+            ]
+            # If 1, change it to padding
+            parts[-2][filtered_primes[:, i] == 1] = self.padding_token
+            parts[-1][filtered_primes[:, i] == 1] = self.padding_token
+        # Replace last separator with EOS
+        parts[-1] = torch.full((bs, 1), self.eos_token)
+        res = torch.cat(parts, dim=1)
+        res = self.move_padding_to_end(res)
+        res = res[:, :self.seq]
+        return res
+
