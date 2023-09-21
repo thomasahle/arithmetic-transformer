@@ -239,13 +239,13 @@ class FactorDataset(Dataset):
     def get_primes(self, number_length):
         if self.primes_length == number_length:
             return self.primes
-        n = self.base ** self.number_length
+        n = self.base**self.number_length
         sieve = torch.ones(n, dtype=torch.bool)
         # We include 1, but not 0
         sieve[0] = False
         for i in range(2, n):
             if sieve[i]:
-                sieve[i*i::i] = False
+                sieve[i * i :: i] = False
         self.primes = torch.nonzero(sieve).squeeze()
         self.primes_length = self.number_length
         return self.primes
@@ -263,21 +263,26 @@ class FactorDataset(Dataset):
 
     def _generate_batch(self, bs):
         primes = self.get_primes(self.number_length)
-        weights = 1/primes
-        indices = torch.multinomial(weights, num_samples=bs * self.max_factors, replacement=True)
+        # A random number contains the factor p with probability 1/p
+        weights = 1 / primes
+        indices = torch.multinomial(
+            weights, num_samples=bs * self.max_factors, replacement=True
+        )
         sampled_primes = primes[indices].reshape(bs, self.max_factors)
         # Products may be too large. Let's fix that
         while True:
             log_prods = torch.sum(torch.log(sampled_primes), dim=1)
             mask = log_prods > math.log(self.base) * self.number_length
-            if mask.sum() == 0:
+            num_too_large = mask.sum().item()
+            if num_too_large == 0:
                 break
-            else:
-                print(f'Notice: {mask.sum()} entries were too large.')
+            # Update the first non-one value in the rows that are too large
             non_one_indices = (sampled_primes != 1).long()
-            cumsum_non_one = torch.cumsum(non_one_indices, dim=1)
-            first_non_one_mask = (cumsum_non_one == 1) & mask.unsqueeze(-1)
+            first_non_one_mask = (
+                torch.cumsum(non_one_indices, dim=1) == 1
+            ) & mask.unsqueeze(-1)
             sampled_primes[first_non_one_mask] = 1
+
         filtered_primes = sampled_primes
         prods = torch.prod(filtered_primes, dim=1)
         filtered_primes = filtered_primes.sort(dim=1).values
@@ -298,6 +303,5 @@ class FactorDataset(Dataset):
         parts[-1] = torch.full((bs, 1), self.eos_token)
         res = torch.cat(parts, dim=1)
         res = self.move_padding_to_end(res)
-        res = res[:, :self.seq]
+        res = res[:, : self.seq]
         return res
-
