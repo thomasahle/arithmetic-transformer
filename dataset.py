@@ -264,18 +264,18 @@ class FactorDataset(Dataset):
     def _generate_batch(self, bs):
         primes = self.get_primes(self.number_length)
         weights = 1/primes
-        # Using rejection sampling to 
+        # Using rejection sampling to
         for c in itertools.count(2):
             indices = torch.multinomial(weights, num_samples=2**c * bs * self.max_factors, replacement=True)
             sampled_primes = primes[indices].reshape(2**c * bs, self.max_factors)
-            prods = torch.prod(sampled_primes, dim=1)
-            mask = prods < self.base ** self.number_length
+            log_prods = torch.sum(torch.log(sampled_primes), dim=1)
+            mask = log_prods < math.log(self.base) * self.number_length
             if mask.sum() < bs:
                 print(f'Notice: Got {mask.sum()} primes, wanted {bs}.')
                 continue
             filtered_primes = sampled_primes[mask][:bs]
-            prods = prods[mask][:bs]
             break
+        prods = torch.prod(filtered_primes, dim=1)
         filtered_primes = filtered_primes.sort(dim=1).values
         parts = [
             torch.full((bs, 1), self.start_token),
