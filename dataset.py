@@ -264,17 +264,21 @@ class FactorDataset(Dataset):
     def _generate_batch(self, bs):
         primes = self.get_primes(self.number_length)
         weights = 1/primes
-        # Using rejection sampling to
-        for c in itertools.count(2):
-            indices = torch.multinomial(weights, num_samples=2**c * bs * self.max_factors, replacement=True)
-            sampled_primes = primes[indices].reshape(2**c * bs, self.max_factors)
+        indices = torch.multinomial(weights, num_samples=bs * self.max_factors, replacement=True)
+        sampled_primes = primes[indices].reshape(bs, self.max_factors)
+        # Products may be too large. Let's fix that
+        while True:
             log_prods = torch.sum(torch.log(sampled_primes), dim=1)
-            mask = log_prods < math.log(self.base) * self.number_length
-            if mask.sum() < bs:
-                print(f'Notice: Got {mask.sum()} primes, wanted {bs}.')
-                continue
-            filtered_primes = sampled_primes[mask][:bs]
-            break
+            mask = log_prods > math.log(self.base) * self.number_length
+            if mask.sum() == 0:
+                break
+            else:
+                print(f'Notice: {mask.sum()} entries were too large.')
+            non_one_indices = (sampled_primes != 1).long()
+            cumsum_non_one = torch.cumsum(non_one_indices, dim=1)
+            first_non_one_mask = (cumsum_non_one == 1) & mask.unsqueeze(-1)
+            sampled_primes[first_non_one_mask] = 1
+        filtered_primes = sampled_primes
         prods = torch.prod(filtered_primes, dim=1)
         filtered_primes = filtered_primes.sort(dim=1).values
         parts = [
