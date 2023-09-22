@@ -207,8 +207,7 @@ class DivModDataset(Dataset):
     def _generate_batch(self, bs):
         a, b = self.make_numbers((2, bs), self.base)
         b = torch.clip(b, min=1)
-        div = a // b
-        mod = a % b
+        div, mod = divmod(a, b)
         return torch.cat(
             [
                 torch.full((bs, 1), self.start_token),
