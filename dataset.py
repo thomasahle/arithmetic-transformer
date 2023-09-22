@@ -232,7 +232,7 @@ class DivModDataset(Dataset):
 class FactorDataset(Dataset):
     def __init__(self, base, number_length, pre_end_padding=0, flip=False):
         super().__init__(base, number_length, pre_end_padding, flip)
-        self.dic[self.separator_token] = ","
+        self.dic[self.separator_token] = "*"
         self.primes = None
         self.primes_length = 0
 
