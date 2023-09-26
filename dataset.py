@@ -82,11 +82,21 @@ class Dataset:
         return sorted_tensor
 
     def generate_batch(self, bs):
-        # TODO: Could insert COT padding here
         res = self._generate_batch(bs)
         res = self.move_padding_to_end(res)
-        res[res == self.n_tokens] = self.padding_token
-        assert res.shape == (bs, self.seq)
+
+        # Insert COT padding
+        if self.pre_end_padding != 0:
+            indices_padding = (res == self.end_token).nonzero(as_tuple=True)
+            expanded_tensor = torch.zeros(bs, self.seq + self.pre_end_padding, dtype=res.dtype)
+            # Calculate the positions in the expanded tensor for all elements
+            positions = torch.arange(self.seq).unsqueeze(0).repeat(bs, 1)
+            positions += self.pre_end_padding * (positions >= indices_padding[1].unsqueeze(1))
+            # Use scatter to insert values at the correct positions
+            expanded_tensor.scatter_(1, positions, res)
+            res = expanded_tensor
+
+        # assert res.shape == (bs, self.seq)
         return res
 
     def _generate_batch(self, tokens):

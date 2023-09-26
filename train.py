@@ -22,6 +22,8 @@ def main():
         default=1000,
         help="Number of examples to generate and train on",
     )
+    parser.add_argument("--train-batches", type=int, default=1000)
+    parser.add_argument("--val-batches", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam LR")
     parser.add_argument(
         "--acc-next", type=float, default=0.9, help="Accuracy before next level"
@@ -225,7 +227,7 @@ def manual_training(model, dataset, args):
     # Standard PyTorch Training Loop
     time_to_success = Counter()
     for epoch in range(args.epochs):
-        train_batches = 1000
+        train_batches = args.train_batches
         with torch.no_grad():
             train_data = dataset.generate_batch(batch_size * train_batches).to(device)
 
@@ -242,7 +244,7 @@ def manual_training(model, dataset, args):
         accs = []
         model.eval()
         with torch.no_grad():
-            val_batches = 100
+            val_batches = args.val_batches
             val_data = dataset.generate_batch(batch_size * val_batches).to(device)
 
             for batch_idx in tqdm.tqdm(range(val_batches)):
