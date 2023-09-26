@@ -276,7 +276,8 @@ class AdditionModel(nn.Module):
 
     @torch.no_grad()
     def print_examples(self, num_examples=3, must_include_a_wrong=False):
-        examples = self.ds.generate_batch(num_examples).to(self.embedding.weight.device)
+        np_examples = self.ds.generate_batch(num_examples)
+        examples = torch.tensor(np_examples).to(self.embedding.weight.device)
         i = 0
         while i < num_examples:
             example = examples[i]
@@ -287,7 +288,8 @@ class AdditionModel(nn.Module):
             is_correct = torch.all(true_answer == raw_prediction)
             # Get at least one wrong example each time
             if is_correct and i == num_examples - 1 and must_include_a_wrong:
-                examples[i] = self.ds.generate_batch(1)[0]
+                np_examples = self.ds.generate_batch(1)
+                examples[i] = torch.tensor(np_examples)[0]
                 continue
             print("Example:", self.ds.repr_example(example))
             print(

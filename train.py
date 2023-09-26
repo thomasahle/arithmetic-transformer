@@ -75,6 +75,11 @@ def main():
         type=int,
         default=10,
     )
+    parser.add_argument(
+        "--initial-number-length",
+        type=int,
+        default=1,
+    )
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--flip", action="store_true", help="Flip order of numbers")
     parser.add_argument("--device", type=str, default=None)
@@ -86,7 +91,7 @@ def main():
     )
     args = parser.parse_args()
 
-    dataset = make_dataset(args)
+    dataset = make_dataset(args, number_length=args.initial_number_length)
 
     model = AdditionModel(
         ds=dataset,
@@ -227,7 +232,8 @@ def manual_training(model, dataset, args):
     for epoch in range(args.epochs):
         train_batches = 1000
         with torch.no_grad():
-            train_data = dataset.generate_batch(batch_size * train_batches).to(device)
+            np_data = dataset.generate_batch(batch_size * train_batches)
+            train_data = torch.tensor(np_data).to(device)
 
         # Training Loop
         model.train()
@@ -243,7 +249,8 @@ def manual_training(model, dataset, args):
         model.eval()
         with torch.no_grad():
             val_batches = 100
-            val_data = dataset.generate_batch(batch_size * val_batches).to(device)
+            np_data = dataset.generate_batch(batch_size * train_batches)
+            val_data = torch.tensor(np_data).to(device)
 
             for batch_idx in tqdm.tqdm(range(val_batches)):
                 batch = val_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
