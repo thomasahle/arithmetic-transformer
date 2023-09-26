@@ -14,7 +14,7 @@ def run_program_with_parameters(num_layers, num_heads):
         "--kind", "transformer-nope",
         "--epochs", "3",
         "--flip",
-        "--hidden-size", "32",
+        "--hidden-size", "30",
         "--num-layers", str(num_layers),
         "--num-heads", str(num_heads)
     ]
