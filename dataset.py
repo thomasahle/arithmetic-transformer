@@ -1,6 +1,6 @@
 import numpy as np
 import math
-import random
+from random import randrange, choice
 import itertools
 
 
@@ -9,12 +9,6 @@ import itertools
 # kind=transformer-lstm gets accuracies (1, 0.95, 0.66), but we just five extra
 # paddings on the left, it gets (1, 0.98, 0.80). Even better, if we add the
 # padding right before the equality sign, ...
-
-def python_integer_randint(low, high, shape):
-    n = math.prod(shape)
-    arr = np.array([random.randrange(low, high) for i in range(n)],
-                   dtype=object).reshape(shape)
-    return arr
 
 def python_integer_bases(base, length):
     bases = np.array(list(reversed(range(length))), dtype=object)
@@ -44,13 +38,9 @@ class Dataset:
     def make_numbers(self, shape, number_length=None):
         if number_length is None:
             number_length = self.number_length
-        digits = python_integer_randint(0, self.base, shape + (number_length,))
-        n_digits = np.random.randint(0, number_length, shape)
-        mask = np.arange(number_length) < n_digits[..., None]
-        digits[mask] = 0
-        bases = python_integer_bases(self.base, number_length)
-        result = (digits * bases).sum(axis=-1)
-        m = np.amax(result)
+        tenpowers = [10**(i+1) for i in range(number_length)]
+        n = math.prod(shape)
+        result = np.array([randrange(choice(tenpowers)) for i in range(n)], dtype=object).reshape(shape)
         return result
 
     def to_digits(self, numbers, length=None):
