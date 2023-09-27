@@ -44,7 +44,7 @@ def save_to_file(headers, rows, filename="results.csv"):
 
 def run(args):
     num_layers_values = list(range(1, args.max_layers + 1))
-    num_heads_values = list(range(1, args.max_heads + 1))
+    num_heads_values = [h for h in range(1, args.max_heads + 1) if args.hidden_size % h == 0]
 
     best_value = 0
     best_parameters = None
