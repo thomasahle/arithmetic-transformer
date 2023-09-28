@@ -4,7 +4,7 @@ import sys
 from tqdm import tqdm
 from tabulate import tabulate
 import argparse
-
+import textwrap
 
 def run_program_with_parameters(num_layers, num_heads, args):
     cmd = [
@@ -22,6 +22,7 @@ def run_program_with_parameters(num_layers, num_heads, args):
     print(cmd)
 
     result = subprocess.run(cmd, capture_output=True, text=True)
+    result.check_returncode()
     matches = re.findall(r"Switching to number length (\d+)", result.stdout)
     print(result.stderr)
     return int(matches[-1]) - 1 if matches else 0
@@ -84,26 +85,28 @@ def plot(args):
     import matplotlib.pyplot as plt
 
     # Load data and headers from the CSV file
-    data = np.genfromtxt(args.filename, delimiter=",", skip_header=1, dtype=int)[:, 1:]
+    data = np.genfromtxt(args.filename, delimiter=",", skip_header=1, dtype=int)
     with open(args.filename, "r") as f:
-        headers = f.readline().strip().split(",")[1:]
+        xheaders = f.readline().strip().split(",")[1:]
 
     fig, ax = plt.subplots()
-    cax = ax.matshow(data, cmap="Greys_r", origin="lower", vmin=0, vmax=4)
+    cax = ax.matshow(data[:, 1:], cmap="Greys_r", origin="lower", vmin=0, vmax=64)
     fig.colorbar(cax)
 
-    ax.xaxis.set_ticks_position("bottom")
-
     # Set tick locations and labels
-    ticks_loc = np.arange(len(headers))
-    ax.set_xticks(ticks_loc)
-    ax.set_yticks(ticks_loc)
-    ax.set_xticklabels(headers)
-    ax.set_yticklabels(headers)
+    ax.xaxis.set_ticks_position("bottom")
+    ax.set_xticks(np.arange(len(xheaders)))
+    ax.set_xticklabels(xheaders)
+
+    yheaders = data[:, 0]
+    ax.set_yticks(np.arange(len(yheaders)))
+    ax.set_yticklabels(yheaders)
 
     ax.set_xlabel("num-heads")
     ax.set_ylabel("num-layers")
-    ax.set_title(args.filename)
+
+    wrapper = textwrap.TextWrapper(width=60)
+    ax.set_title(wrapper.fill(args.title))
 
     plt.show()
 
@@ -136,6 +139,7 @@ def main():
     # Plot subparser
     plot_parser = subparsers.add_parser("plot", help="Visualize results.")
     plot_parser.add_argument("filename", default="results.csv", help="Name of the file to plot data from.")
+    plot_parser.add_argument("--title", help="Title of plot")
 
     args = parser.parse_args()
 
