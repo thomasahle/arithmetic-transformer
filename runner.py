@@ -17,12 +17,13 @@ def run_program_with_parameters(num_layers, num_heads, args):
         str(num_heads),
     ]
     for k, v in vars(args).items():
-        if k not in ["max_layers", "max_heads", "command"]:
+        if k not in ["max_layers", "max_heads", "command", "outfile"]:
             cmd.extend([f"--{k.replace('_','-')}", str(v)])
     print(cmd)
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     matches = re.findall(r"Switching to number length (\d+)", result.stdout)
+    print(result.stderr)
     return int(matches[-1]) - 1 if matches else 0
 
 
