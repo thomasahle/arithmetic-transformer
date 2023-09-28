@@ -35,7 +35,7 @@ def print_table(headers, rows):
     print(tabulate(rows, headers=headers, tablefmt="grid"))
 
 
-def save_to_file(headers, rows, filename="results.csv"):
+def save_to_file(headers, rows, filename):
     with open(filename, "w") as file:
         file.write(",".join(headers) + "\n")
         for row in rows:
@@ -71,7 +71,7 @@ def run(args):
                 pbar.update(1)
 
     rows = [[num_layers] + row for num_layers, row in zip(num_layers_values, results_table)]
-    save_to_file(headers, rows)
+    save_to_file(headers, rows, args.outfile)
 
     print(
         f"\nThe best value is {best_value} with num-layers = {best_parameters[0]} and num-heads = {best_parameters[1]}"
@@ -117,6 +117,8 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run train.py with different parameters.")
     run_parser.add_argument("--max-layers", type=int, default=6, help="Values for num-layers parameter.")
     run_parser.add_argument("--max-heads", type=int, default=6, help="Values for num-heads parameter.")
+    run_parser.add_argument("--outfile", type=str, help="Where to save the results")
+    run_parser.add_argument("--dropout", type=float, default=0.05)
     run_parser.add_argument("--base", type=int, default=2, help="Base argument for train.py.")
     run_parser.add_argument("--epochs", type=int, default=2)
     run_parser.add_argument(
