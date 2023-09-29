@@ -22,7 +22,11 @@ def run_program_with_parameters(num_layers, num_heads, args):
     print(cmd)
 
     result = subprocess.run(cmd, capture_output=True, text=True)
-    result.check_returncode()
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        print('Retrying...')
+        return run_program_with_parameters(num_layers, num_heads, args)
     matches = re.findall(r"Switching to number length (\d+)", result.stdout)
     print(result.stderr)
     return int(matches[-1]) - 1 if matches else 0
