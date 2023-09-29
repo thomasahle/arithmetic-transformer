@@ -80,6 +80,12 @@ def main():
         type=int,
         default=1,
     )
+    parser.add_argument(
+        "--preferred-dtype",
+        type=str,
+        default='int64',
+        help="Use this dtype if possible (int64, object)"
+    )
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--flip", action="store_true", help="Flip order of numbers")
     parser.add_argument("--device", type=str, default=None)
@@ -113,6 +119,7 @@ def main():
 
 def make_dataset(args, number_length=1):
     kvargs = dict(
+        preferred_dtype=args.preferred_dtype,
         base=args.base,
         number_length=number_length,
         pre_end_padding=args.cot_padding,

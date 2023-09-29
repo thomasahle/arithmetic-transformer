@@ -10,17 +10,14 @@ import itertools
 # paddings on the left, it gets (1, 0.98, 0.80). Even better, if we add the
 # padding right before the equality sign, ...
 
-def python_integer_bases(base, length):
-    bases = np.array(list(reversed(range(length))), dtype=object)
-    bases = np.expand_dims(np.power(base, bases), 0)
-    return bases
-
 class Dataset:
-    def __init__(self, base, number_length, pre_end_padding=0, flip=False):
+    def __init__(self, base, number_length, pre_end_padding=0,
+                 flip=False, preferred_dtype='int64'):
         self.base = base
         self.number_length = number_length
         self.pre_end_padding = pre_end_padding
         self.flip = flip
+        self.preferred_dtype = preferred_dtype
 
         self.start_token = base  # Before input
         self.end_token = base + 1  # After input
@@ -38,9 +35,19 @@ class Dataset:
     def make_numbers(self, shape, number_length=None):
         if number_length is None:
             number_length = self.number_length
-        tenpowers = [10**(i+1) for i in range(number_length)]
-        n = math.prod(shape)
-        result = np.array([randrange(choice(tenpowers)) for i in range(n)], dtype=object).reshape(shape)
+        if np.dtype(self.preferred_dtype) is np.dtype(object):
+            powers = [self.base**(i+1) for i in range(number_length)]
+            n = math.prod(shape)
+            result = np.array([randrange(choice(powers)) for i in range(n)],
+                              dtype=object).reshape(shape)
+        else:
+            digits_shape = shape + (number_length,)
+            digits = np.random.randint(0, self.base, math.prod(digits_shape)).reshape(digits_shape)
+            n_digits = np.random.randint(0, number_length, shape)
+            mask = np.arange(number_length) < n_digits[..., None]
+            exponents = np.arange(number_length - 1, -1, -1, dtype=self.preferred_dtype)
+            bases = np.expand_dims(np.power(self.base, exponents), 0)
+            result = (digits * bases).sum(axis=-1)
         return result
 
     def to_digits(self, numbers, length=None):
@@ -49,7 +56,8 @@ class Dataset:
 
         # Convert numbers to digits
         tensor = np.tile(np.expand_dims(numbers, 1), (1, length))
-        bases = python_integer_bases(self.base, length)
+        exponents = np.arange(length - 1, -1, -1, dtype=self.preferred_dtype)
+        bases = np.expand_dims(np.power(self.base, exponents), 0)
         digits = (tensor // bases) % self.base
 
         # Mask leading zeros
@@ -117,8 +125,8 @@ class Dataset:
 
 
 class AddModDataset(Dataset):
-    def __init__(self, base, number_length, pre_end_padding=0, flip=False):
-        super().__init__(base, number_length, pre_end_padding, flip)
+    def __init__(self, base, number_length, pre_end_padding=0, flip=False, **kwargs):
+        super().__init__(base, number_length, pre_end_padding, flip, **kwargs)
         self.separator_token2 = self.n_tokens
         self.n_tokens += 1
         self.dic[self.separator_token] = "+"
@@ -159,8 +167,9 @@ class BinaryOpDataset(Dataset):
         pre_end_padding=0,
         min_b=0,
         flip=False,
+        **kwargs,
     ):
-        super().__init__(base, number_length, pre_end_padding, flip)
+        super().__init__(base, number_length, pre_end_padding, flip, **kwargs)
         self.func = func
         self.sep_string = sep
         self.out_length = out_length
@@ -196,8 +205,9 @@ class DivModDataset(Dataset):
         number_length,
         pre_end_padding=0,
         flip=False,
+        **kwargs,
     ):
-        super().__init__(base, number_length, pre_end_padding, flip)
+        super().__init__(base, number_length, pre_end_padding, flip, **kwargs)
         self.output_separator = self.n_tokens
         self.n_tokens += 1
         self.dic[self.separator_token] = "/%"
@@ -229,8 +239,8 @@ class DivModDataset(Dataset):
 
 
 class FactorDataset(Dataset):
-    def __init__(self, base, number_length, pre_end_padding=0, flip=False):
-        super().__init__(base, number_length, pre_end_padding, flip)
+    def __init__(self, base, number_length, pre_end_padding=0, flip=False, **kwargs):
+        super().__init__(base, number_length, pre_end_padding, flip, **kwargs)
         self.dic[self.separator_token] = "*"
         self.primes = None
         self.primes_length = 0
@@ -266,7 +276,7 @@ class FactorDataset(Dataset):
         weights = 1 / primes
         num_samples = bs * self.max_factors
         sampled_primes = random.choices(primes, weights=weights, k=num_samples)
-        sampled_primes = np.array(sampled_primes, dtype=object)
+        sampled_primes = np.array(sampled_primes, dtype=self.preferred_dtype)
         sampled_primes = np.reshape(sampled_primes, (bs, self.max_factors))
         # Products may be too large. Let's fix that
         while True:
